@@ -93,7 +93,7 @@ static void SWLog(NSString *s) {
     g_lab.font = [UIFont fontWithName:@"Menlo" size:12];
     g_lab.textColor = [UIColor greenColor];
     g_lab.backgroundColor = [UIColor colorWithWhite:0 alpha:0.75];
-    g_lab.text = @"SW diag 22 scene start";
+    g_lab.hidden = YES; // лог больше не нужен
 
     WKUserContentController *ucc = [[WKUserContentController alloc] init];
     SWBridge *bridge = [[SWBridge alloc] init];
