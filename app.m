@@ -1,4 +1,4 @@
-/* SoundWave — нативная оболочка + самодиагностика */
+/* SoundWave + визуальный лог запуска (UILabel поверх всего) */
 #import <UIKit/UIKit.h>
 #import <WebKit/WebKit.h>
 #import <AVFAudio/AVFAudio.h>
@@ -16,8 +16,16 @@ static NSString *const SW_BRIDGE_JS =
   @"window.__swRecv=function(o){var p=window.__swP[o.i];if(!p)return;"
   @"delete window.__swP[o.i];"
   @"if(o.err)p.j(new Error(o.err));else p.r({status:o.status,text:o.text});};"
-  @"window.onerror=function(m,s,l){document.title='JS:'+m;return false;};"
   @"})();";
+
+/* ---------- визуальный лог ---------- */
+static UILabel *g_lab = nil;
+static void SWLog(NSString *s) {
+    if (!g_lab) return;
+    dispatch_async(dispatch_get_main_queue(), ^{
+        g_lab.text = [g_lab.text stringByAppendingFormat:@"\n%@", s];
+    });
+}
 
 /* ---------- сетевой мост ---------- */
 @interface SWBridge : NSObject <WKScriptMessageHandler>
@@ -64,22 +72,11 @@ static NSString *const SW_BRIDGE_JS =
 }
 @end
 
-/* ---------- делегат приложения + диагностика навигации ---------- */
+/* ---------- делегат приложения ---------- */
 @interface SWAppDelegate : NSObject <UIApplicationDelegate, WKNavigationDelegate>
 @end
 
 @implementation SWAppDelegate
-
-- (void)showDiag:(WKWebView *)wv title:(NSString *)title text:(NSString *)text {
-    NSString *html = [NSString stringWithFormat:
-      @"<html><body style='background:#08080d;color:#fff;font-family:-apple-system;"
-      @"font-size:16px;padding:40px;line-height:1.5'>"
-      @"<div style='color:#ff9500;font-size:34px;font-weight:800;margin-bottom:20px'>SoundWave</div>"
-      @"<div style='font-weight:700;margin-bottom:14px;color:#ff5577'>%@</div>"
-      @"<pre style='white-space:pre-wrap;color:#8e8ea3;font-size:13px'>%@</pre></body></html>",
-      title, text ?: @""];
-    [wv loadHTMLString:html baseURL:nil];
-}
 
 - (BOOL)application:(UIApplication *)application
     didFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
@@ -89,6 +86,14 @@ static NSString *const SW_BRIDGE_JS =
     UIViewController *root = [[UIViewController alloc] init];
     root.view.frame = bounds;
 
+    /* лог-метка поверх всего экрана */
+    g_lab = [[UILabel alloc] initWithFrame:CGRectMake(16, 60, bounds.size.width - 32, bounds.size.height - 120)];
+    g_lab.numberOfLines = 0;
+    g_lab.font = [UIFont fontWithName:@"Menlo" size:12];
+    g_lab.textColor = [UIColor greenColor];
+    g_lab.backgroundColor = [UIColor colorWithWhite:0 alpha:0.75];
+    g_lab.text = @"SoundWave diag v2.1 start";
+
     WKUserContentController *ucc = [[WKUserContentController alloc] init];
     SWBridge *bridge = [[SWBridge alloc] init];
     [ucc addScriptMessageHandler:bridge name:@"sw"];
@@ -97,6 +102,7 @@ static NSString *const SW_BRIDGE_JS =
         injectionTime:WKUserScriptInjectionTimeAtDocumentStart
         forMainFrameOnly:YES];
     [ucc addUserScript:us];
+    SWLog(@"bridge ok");
 
     WKWebViewConfiguration *cfg = [[WKWebViewConfiguration alloc] init];
     cfg.userContentController = ucc;
@@ -107,8 +113,9 @@ static NSString *const SW_BRIDGE_JS =
     wv.navigationDelegate = self;
     wv.backgroundColor = [UIColor colorWithWhite:0 alpha:1];
     [root.view addSubview:wv];
+    [root.view addSubview:g_lab]; /* лог поверх вебвью */
+    SWLog(@"webview ok");
 
-    /* аудиосессия — не блокируем запуск */
     dispatch_async(dispatch_get_global_queue(0, 0), ^{
         AVAudioSession *sess = [AVAudioSession sharedInstance];
         [sess setCategory:AVAudioSessionCategoryPlayback error:nil];
@@ -117,35 +124,38 @@ static NSString *const SW_BRIDGE_JS =
 
     NSString *path = [[NSBundle mainBundle] pathForResource:@"index" ofType:@"html" inDirectory:@"www"];
     if (path) {
+        SWLog([@"path ok: " stringByAppendingString:path.lastPathComponent]);
         NSURL *nu = [NSURL fileURLWithPath:path];
         [wv loadFileURL:nu allowingReadAccessToURL:[NSBundle mainBundle].bundleURL];
+        SWLog(@"load called");
     } else {
-        NSString *contents = [NSString stringWithFormat:
-          @"бандл: %@\nфайлы: %@",
-          [NSBundle mainBundle].bundlePath,
-          [[NSFileManager defaultManager] contentsOfDirectoryAtPath:[NSBundle mainBundle].bundlePath error:nil]];
-        [self showDiag:wv title:@"index.html не найден" text:contents];
+        NSArray *files = [[NSFileManager defaultManager]
+            contentsOfDirectoryAtPath:[NSBundle mainBundle].bundlePath error:nil];
+        SWLog([@"NO index.html; bundle: " stringByAppendingString:[files componentsJoinedByString:@", "]]);
     }
 
     win.rootViewController = root;
     [win makeKeyAndVisible];
+    SWLog(@"window visible");
     return YES;
 }
 
-/* ---------- диагностика загрузки страницы ---------- */
+- (void)webView:(WKWebView *)wv didStartProvisionalNavigation:(WKNavigation *)nav {
+    SWLog(@"nav start");
+}
+- (void)webView:(WKWebView *)wv didFinishNavigation:(WKNavigation *)nav {
+    SWLog(@"nav finished — страница жива, лог можно скрыть");
+}
 - (void)webView:(WKWebView *)wv didFailProvisionalNavigation:(WKNavigation *)nav
       withError:(NSError *)error {
-    [self showDiag:wv title:@"Не удалось загрузить страницу" text:error.localizedDescription];
+    SWLog([@"FAIL prov: " stringByAppendingString:error.localizedDescription]);
 }
 - (void)webView:(WKWebView *)wv didFailNavigation:(WKNavigation *)nav
       withError:(NSError *)error {
-    [self showDiag:wv title:@"Ошибка загрузки" text:error.localizedDescription];
+    SWLog([@"FAIL nav: " stringByAppendingString:error.localizedDescription]);
 }
 - (void)webViewWebContentProcessDidTerminate:(WKWebView *)wv {
-    [self showDiag:wv title:@"Процесс WebContent упал" text:nil];
-}
-- (void)webView:(WKWebView *)wv didFinishNavigation:(WKNavigation *)nav {
-    /* страница загрузилась — если экран всё ещё чёрный, проблема в самой странице */
+    SWLog(@"WebContent process died");
 }
 @end
 
