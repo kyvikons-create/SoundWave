@@ -1,4 +1,4 @@
-/* SoundWave — scene-based lifecycle (канонично для iOS 13+/18) + визуальный лог */
+/* SoundWave — финальная нативная оболочка (scene lifecycle, точный лэйаут) */
 #import <UIKit/UIKit.h>
 #import <WebKit/WebKit.h>
 #import <AVFAudio/AVFAudio.h>
@@ -17,15 +17,6 @@ static NSString *const SW_BRIDGE_JS =
   @"delete window.__swP[o.i];"
   @"if(o.err)p.j(new Error(o.err));else p.r({status:o.status,text:o.text});};"
   @"})();";
-
-/* ---------- визуальный лог ---------- */
-static UILabel *g_lab = nil;
-static void SWLog(NSString *s) {
-    if (!g_lab) return;
-    dispatch_async(dispatch_get_main_queue(), ^{
-        g_lab.text = [g_lab.text stringByAppendingFormat:@"\n%@", s];
-    });
-}
 
 /* ---------- сетевой мост ---------- */
 @interface SWBridge : NSObject <WKScriptMessageHandler>
@@ -72,7 +63,19 @@ static void SWLog(NSString *s) {
 }
 @end
 
-/* ---------- делегат сцены: окно живёт здесь ---------- */
+/* ---------- корневой VC: вебвью всегда точно в размер экрана ---------- */
+@interface SWRootVC : UIViewController
+@property (strong, nonatomic) WKWebView *wv;
+@end
+
+@implementation SWRootVC
+- (void)viewDidLayoutSubviews {
+    [super viewDidLayoutSubviews];
+    if (self.wv) self.wv.frame = self.view.bounds; /* никаких чёрных полос */
+}
+@end
+
+/* ---------- делегат сцены ---------- */
 @interface SWSceneDelegate : NSObject <UIWindowSceneDelegate>
 @property (strong, nonatomic) UIWindow *window;
 @end
@@ -81,19 +84,13 @@ static void SWLog(NSString *s) {
 - (void)scene:(UIScene *)scene willConnectToSession:(UISceneSession *)session
       options:(UISceneConnectionOptions *)options {
     UIWindowScene *ws = (UIWindowScene *)scene;
-    CGRect bounds = ws.coordinateSpace.bounds;
 
     UIWindow *win = [[UIWindow alloc] initWithWindowScene:ws];
+    win.backgroundColor = [UIColor colorWithWhite:0 alpha:1];
     self.window = win;
-    UIViewController *root = [[UIViewController alloc] init];
-    win.rootViewController = root;
 
-    g_lab = [[UILabel alloc] initWithFrame:CGRectMake(16, 60, bounds.size.width - 32, bounds.size.height - 120)];
-    g_lab.numberOfLines = 0;
-    g_lab.font = [UIFont fontWithName:@"Menlo" size:12];
-    g_lab.textColor = [UIColor greenColor];
-    g_lab.backgroundColor = [UIColor colorWithWhite:0 alpha:0.75];
-    g_lab.hidden = YES; // лог больше не нужен
+    SWRootVC *root = [[SWRootVC alloc] init];
+    win.rootViewController = root;
 
     WKUserContentController *ucc = [[WKUserContentController alloc] init];
     SWBridge *bridge = [[SWBridge alloc] init];
@@ -107,13 +104,12 @@ static void SWLog(NSString *s) {
     WKWebViewConfiguration *cfg = [[WKWebViewConfiguration alloc] init];
     cfg.userContentController = ucc;
 
-    WKWebView *wv = [[WKWebView alloc] initWithFrame:bounds configuration:cfg];
+    WKWebView *wv = [[WKWebView alloc] initWithFrame:ws.coordinateSpace.bounds configuration:cfg];
     wv.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
-    bridge.webView = wv;
     wv.backgroundColor = [UIColor colorWithWhite:0 alpha:1];
+    bridge.webView = wv;
+    root.wv = wv;
     [root.view addSubview:wv];
-    [root.view addSubview:g_lab];
-    SWLog(@"webview ok");
 
     dispatch_async(dispatch_get_global_queue(0, 0), ^{
         AVAudioSession *sess = [AVAudioSession sharedInstance];
@@ -125,20 +121,18 @@ static void SWLog(NSString *s) {
     if (path) {
         NSURL *nu = [NSURL fileURLWithPath:path];
         [wv loadFileURL:nu allowingReadAccessToURL:[NSBundle mainBundle].bundleURL];
-        SWLog(@"load called");
     } else {
-        NSArray *files = [[NSFileManager defaultManager]
-            contentsOfDirectoryAtPath:[NSBundle mainBundle].bundlePath error:nil];
-        SWLog([@"NO index.html: " stringByAppendingString:[files componentsJoinedByString:@", "]]);
+        NSString *html = @"<body style='background:#08080d;color:#fff;font-family:-apple-system;"
+          @"padding:40px'><h2>index.html не найден</h2></body>";
+        [wv loadHTMLString:html baseURL:nil];
     }
 
     [win makeKeyAndVisible];
-    SWLog(@"window visible");
 }
 @end
 
-/* ---------- делегат приложения: раздаёт конфигурацию сцены ---------- */
-@interface SWAppDelegate : NSObject <UIApplicationDelegate, WKNavigationDelegate>
+/* ---------- делегат приложения ---------- */
+@interface SWAppDelegate : NSObject <UIApplicationDelegate>
 @end
 
 @implementation SWAppDelegate
@@ -149,26 +143,6 @@ static void SWLog(NSString *s) {
         initWithName:@"Default" sessionRole:connectingSceneSession.role];
     cfg.delegateClass = [SWSceneDelegate class];
     return cfg;
-}
-
-/* навигация — лог */
-- (void)webView:(WKWebView *)wv didStartProvisionalNavigation:(WKNavigation *)nav {
-    SWLog(@"nav start");
-}
-- (void)webView:(WKWebView *)wv didFinishNavigation:(WKNavigation *)nav {
-    SWLog(@"nav finished");
-    /* страница жива: убираем лог через пару секунд */
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 4 * NSEC_PER_SEC),
-                   dispatch_get_main_queue(), ^{
-        [UIView animateWithDuration:0.5 animations:^{ g_lab.alpha = 0; }];
-    });
-}
-- (void)webView:(WKWebView *)wv didFailProvisionalNavigation:(WKNavigation *)nav
-      withError:(NSError *)error {
-    SWLog([@"FAIL prov: " stringByAppendingString:error.localizedDescription]);
-}
-- (void)webViewWebContentProcessDidTerminate:(WKWebView *)wv {
-    SWLog(@"WebContent died");
 }
 @end
 

@@ -36,6 +36,11 @@ img{-webkit-user-drag:none}
   padding:calc(var(--st) + 14px) 16px calc(150px + var(--sb))}
 .scroll::-webkit-scrollbar{display:none}
 .ltitle{font-size:32px;font-weight:800;letter-spacing:-.6px;margin:6px 0 16px}
+.hero{margin:8px 0 18px}
+.hero-t{font-size:40px;font-weight:900;letter-spacing:-1.6px;
+  background:linear-gradient(115deg,#ff5500 10%,#ffb37a 50%,#ff5500 90%);
+  -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:transparent}
+.hero-s{color:var(--t2);font-size:13.5px;margin-top:3px;font-weight:500}
 .hint{font-size:13px;color:var(--t2);margin-bottom:10px;font-weight:600}
 .sentinel{height:4px}
 
@@ -77,6 +82,22 @@ img{-webkit-user-drag:none}
 .heart.on{color:#ff5577}
 @keyframes pop{0%{transform:scale(1)}40%{transform:scale(1.4)}100%{transform:scale(1)}}
 .heart.on svg,.np-like.on svg{animation:pop .35s ease}
+
+/* ---------- плеер: живой эквалайзер и свечение ---------- */
+.np-wave{display:flex;gap:3px;align-items:flex-end;justify-content:center;height:26px;margin:10px 0 4px}
+.np-wave i{width:3px;border-radius:2px;background:linear-gradient(180deg,#ff9500,#ff5500);height:6px;
+  animation:wv 1s ease-in-out infinite;opacity:.9}
+body.paused .np-wave i{animation-play-state:paused;height:4px;opacity:.25}
+@keyframes wv{0%,100%{height:5px}50%{height:22px}}
+@keyframes glowp{
+  0%,100%{box-shadow:0 26px 70px rgba(0,0,0,.65),0 0 55px rgba(255,90,0,.22)}
+  50%{box-shadow:0 26px 70px rgba(0,0,0,.65),0 0 95px rgba(255,90,0,.42)}}
+body:not(.paused) .np-art{animation:glowp 3.4s ease-in-out infinite}
+.np-utils{display:flex;gap:10px;justify-content:center;margin:4px 0 6px}
+.np-util{flex:1;max-width:160px;padding:10px 0;border-radius:14px;background:rgba(255,255,255,.08);
+  border:1px solid var(--line);color:#f5f5f7;font-size:13px;font-weight:600}
+.np-util:active{transform:scale(.96)}
+.np-util.on{background:rgba(255,85,0,.16);border-color:rgba(255,120,0,.45);color:#ffb37a}
 .qnum{width:24px;text-align:center;color:#55556a;font-size:13px;font-variant-numeric:tabular-nums;flex:none}
 .eq{position:absolute;right:5px;bottom:5px;display:flex;gap:2.5px;align-items:flex-end;height:13px;padding:3px 4px;background:rgba(0,0,0,.45);border-radius:6px;backdrop-filter:blur(4px)}
 .eq i{width:3px;background:var(--acc2);border-radius:1.5px;height:4px;animation:eq .9s ease-in-out infinite}
@@ -213,7 +234,7 @@ body.paused .np-art{transform:scale(.93)}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 </style>
 </head>
-<body>
+<body class="paused">
 <div id="app">
 
   <main id="screens">
@@ -230,6 +251,8 @@ body.paused .np-art{transform:scale(.93)}
           </button>
         </div>
         <div id="search-home">
+          <p class="hint" id="hist-hint" hidden>Недавние запросы</p>
+          <div class="chips" id="hist"></div>
           <p class="hint">Попробуйте</p>
           <div class="chips" id="sugg"></div>
         </div>
@@ -241,7 +264,10 @@ body.paused .np-art{transform:scale(.93)}
     <!-- ======== ОБЗОР ======== -->
     <section class="screen active" id="scr-discover">
       <div class="scroll" id="discover-scroll">
-        <h1 class="ltitle">Обзор</h1>
+        <div class="hero">
+          <div class="hero-t">SoundWave</div>
+          <div class="hero-s">Музыка SoundCloud — красиво и без лишнего</div>
+        </div>
         <div class="chips scrollx" id="genres"></div>
         <div id="chart-list" class="list"></div>
         <div id="chart-sent" class="sentinel"></div>
@@ -358,6 +384,11 @@ body.paused .np-art{transform:scale(.93)}
         <button class="np-playbtn" id="np-play" aria-label="Играть/пауза"></button>
         <button class="np-ctl big" id="np-next" aria-label="Вперёд"></button>
         <button class="np-ctl" id="np-repeat" aria-label="Повтор"></button>
+      </div>
+      <div class="np-wave" id="np-wave" aria-hidden="true"></div>
+      <div class="np-utils">
+        <button class="np-util" id="np-speed">1×</button>
+        <button class="np-util" id="np-timer">Таймер сна</button>
       </div>
       <button class="np-quebtn" id="np-queue">Очередь</button>
     </div>
@@ -603,7 +634,10 @@ async function extendRelated(){
 /* --- события аудио --- */
 audio.addEventListener('play',  () => { P.playing = true;  syncPlayUI(); });
 audio.addEventListener('pause', () => { P.playing = false; syncPlayUI(); });
-audio.addEventListener('ended', () => next(true));
+audio.addEventListener('ended', () => {
+  if (sleepMode === 'end'){ resetSleep('Пауза — конец трека. Спокойной ночи 🌙'); return; }
+  next(true);
+});
 audio.addEventListener('loadedmetadata', () => { $('#tdur').textContent = fmt(audio.duration || (current() && current().dur) || 0); });
 audio.addEventListener('waiting', () => setBusy(true));
 audio.addEventListener('playing', () => setBusy(false));
@@ -744,7 +778,7 @@ async function runSearch(q, reset){
   try {
     const list = await searchTracks(q, searchState.offset);
     if (searchState.q !== q) return;
-    if (reset){ searchState.list = list; renderList(c, list); if (!list.length) c.innerHTML = emptyState('Ничего не найдено', 'Попробуйте другой запрос или проверьте ключ в настройках'); }
+    if (reset){ searchState.list = list; renderList(c, list); if (list.length) pushSearchHistory(q); else c.innerHTML = emptyState('Ничего не найдено', 'Попробуйте другой запрос или проверьте ключ в настройках'); }
     else if (list.length){ renderList(c, list, { append: true }); searchState.list = c._list; }
     searchState.offset += list.length;
     searchState.done = list.length < 30;
@@ -771,6 +805,25 @@ $('#sugg').addEventListener('click', e => {
   $('#q').value = b.dataset.sq; $('#qclear').hidden = false;
   runSearch(b.dataset.sq, true);
 });
+
+/* ---------- история поиска ---------- */
+function renderSearchHistory(){
+  const h = LS.get('shistory', []);
+  $('#hist-hint').hidden = !h.length;
+  $('#hist').innerHTML = h.map(s => `<button class="chip on" data-sq="${esc(s)}">${esc(s)}</button>`).join('');
+}
+$('#hist').addEventListener('click', e => {
+  const b = e.target.closest('[data-sq]'); if (!b) return;
+  $('#q').value = b.dataset.sq; $('#qclear').hidden = false;
+  runSearch(b.dataset.sq, true);
+});
+function pushSearchHistory(q){
+  let h = LS.get('shistory', []).filter(x => x !== q);
+  h.unshift(q);
+  LS.set('shistory', h.slice(0, 8));
+  renderSearchHistory();
+}
+renderSearchHistory();
 
 /* ============================== экран: обзор ============================== */
 const GENRES = [
@@ -956,6 +1009,46 @@ $('#qs-list').addEventListener('click', e => {
 });
 $('#np-queue').addEventListener('click', () => $('#qs').classList.add('open'));
 $('#qs-bd').addEventListener('click', () => $('#qs').classList.remove('open'));
+
+/* ---------- скорость и таймер сна ---------- */
+const SPEEDS = [1, 1.25, 1.5, 2, 0.75];
+let speedIdx = 0;
+$('#np-speed').addEventListener('click', () => {
+  speedIdx = (speedIdx + 1) % SPEEDS.length;
+  const v = SPEEDS[speedIdx];
+  audio.playbackRate = v;
+  const b = $('#np-speed');
+  b.textContent = (v === 1 ? '1×' : v + '×');
+  b.classList.toggle('on', v !== 1);
+  toast('Скорость: ' + v + '×');
+});
+
+let sleepMode = 0, sleepTimerT = null;   /* 0 выкл; минуты; 'end' — конец трека */
+function resetSleep(msg){
+  clearTimeout(sleepTimerT); sleepTimerT = null; sleepMode = 0;
+  const b = $('#np-timer');
+  b.textContent = 'Таймер сна'; b.classList.remove('on');
+  if (msg) toast(msg);
+}
+$('#np-timer').addEventListener('click', () => {
+  const steps = [0, 15, 30, 60, 'end'];
+  const cur = steps.indexOf(sleepMode);
+  const next = steps[(cur + 1) % steps.length];
+  clearTimeout(sleepTimerT); sleepTimerT = null; sleepMode = 0;
+  const b = $('#np-timer');
+  if (next === 0){ resetSleep('Таймер выключен'); return; }
+  if (next === 'end'){ sleepMode = 'end'; b.textContent = 'Конец трека'; b.classList.add('on'); toast('Пауза в конце трека'); return; }
+  sleepMode = next;
+  sleepTimerT = setTimeout(() => { audio.pause(); resetSleep('Таймер: остановлено 🌙'); }, next * 60000);
+  b.textContent = next + ' мин'; b.classList.add('on');
+  toast('Таймер сна: ' + next + ' мин');
+});
+
+/* декоративный эквалайзер в плеере */
+$('#np-wave').innerHTML = Array.from({ length: 28 }, () => {
+  const d = (0.55 + Math.random() * 0.9).toFixed(2), dl = (Math.random() * 1.2).toFixed(2);
+  return `<i style="animation-duration:${d}s;animation-delay:${dl}s"></i>`;
+}).join('');
 
 /* ============================== настройки ============================== */
 function updateCidUI(){
