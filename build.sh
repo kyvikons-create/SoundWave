@@ -7,10 +7,10 @@ xcrun --sdk iphoneos clang \
   -mios-version-min=15.0 \
   -fobjc-arc \
   -framework UIKit -framework Foundation -framework CoreFoundation \
-  -framework WebKit -framework AVFAudio \
+  -framework WebKit -framework AVFAudio -framework MediaPlayer \
   app.m -o SoundWave
 
-echo "== кодподпись (ad-hoc, Sideloadly переподпишет своим сертификатом) =="
+echo "== ad-hoc codesign =="
 codesign --force --sign - --timestamp=none SoundWave
 
 APP="Payload/SoundWave.app"

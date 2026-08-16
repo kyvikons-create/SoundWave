@@ -1,7 +1,7 @@
-
 #import <UIKit/UIKit.h>
 #import <WebKit/WebKit.h>
 #import <AVFAudio/AVFAudio.h>
+#import <MediaPlayer/MediaPlayer.h>
 
 static NSString *const SW_UA =
   @"Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15"
@@ -23,8 +23,46 @@ static NSString *const SW_BRIDGE_JS =
 @end
 
 @implementation SWBridge
+
++ (void)updateNowPlaying:(NSDictionary *)d {
+    NSMutableDictionary *info = [NSMutableDictionary dictionary];
+    if (d[@"title"]) info[MPMediaItemPropertyTitle] = d[@"title"];
+    if (d[@"artist"]) info[MPMediaItemPropertyArtist] = d[@"artist"];
+    double dur = [d[@"dur"] doubleValue];
+    if (dur > 0) info[MPMediaItemPropertyPlaybackDuration] = @(dur);
+    info[MPNowPlayingInfoPropertyElapsedPlaybackTime] = @([d[@"pos"] doubleValue]);
+    double rate = [d[@"playing"] boolValue] ? ([d[@"rate"] doubleValue] > 0 ? [d[@"rate"] doubleValue] : 1.0) : 0.0;
+    info[MPNowPlayingInfoPropertyPlaybackRate] = @(rate);
+    [MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo = info;
+
+    NSString *art = d[@"art"];
+    if (art.length > 4) {
+        NSURL *au = [NSURL URLWithString:art];
+        if (!au) return;
+        [[[NSURLSession sharedSession] dataTaskWithURL:au
+            completionHandler:^(NSData *data, NSURLResponse *r, NSError *e) {
+            if (!data) return;
+            UIImage *img = [UIImage imageWithData:data];
+            if (!img) return;
+            dispatch_async(dispatch_get_main_queue(), ^{
+                MPMediaItemArtwork *a = [[MPMediaItemArtwork alloc] initWithImage:img];
+                NSMutableDictionary *info2 = [[MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo mutableCopy];
+                if (!info2) info2 = [NSMutableDictionary dictionary];
+                info2[MPMediaItemPropertyArtwork] = a;
+                [MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo = info2;
+            });
+        }] resume];
+    }
+}
+
 - (void)userContentController:(WKUserContentController *)uc
        didReceiveScriptMessage:(WKScriptMessage *)m {
+    if ([m.body isKindOfClass:[NSDictionary class]] && m.body[@"cmd"]) {
+        if ([m.body[@"cmd"] isEqualToString:@"nowplaying"]) {
+            [SWBridge updateNowPlaying:m.body];
+        }
+        return;
+    }
     NSString *u   = m.body[@"u"];
     NSString *mid = m.body[@"i"];
     NSURL *url = u ? [NSURL URLWithString:u] : nil;
@@ -69,11 +107,9 @@ static NSString *const SW_BRIDGE_JS =
 @implementation SWRootVC
 - (void)viewDidLayoutSubviews {
     [super viewDidLayoutSubviews];
-    if (self.wv && !self.wv.translatesAutoresizingMaskIntoConstraints) {
-        
-        return;
+    if (self.wv && self.wv.constraints.count == 0) {
+        self.wv.frame = self.view.bounds;
     }
-    if (self.wv) self.wv.frame = self.view.bounds;
 }
 @end
 
@@ -82,6 +118,36 @@ static NSString *const SW_BRIDGE_JS =
 @end
 
 @implementation SWSceneDelegate
+
+- (void)setupRemoteCommands:(WKWebView *)wv {
+    static BOOL done = NO;
+    if (done) return;
+    done = YES;
+    MPRemoteCommandCenter *rc = [MPRemoteCommandCenter sharedCommandCenter];
+    [rc.playCommand addTargetWithHandler:^MPRemoteCommandHandlerStatus(MPRemoteCommandEvent *e) {
+        [wv evaluateJavaScript:@"window.__swRemote&&window.__swRemote('play')" completionHandler:nil];
+        return MPRemoteCommandHandlerStatusSuccess;
+    }];
+    [rc.pauseCommand addTargetWithHandler:^MPRemoteCommandHandlerStatus(MPRemoteCommandEvent *e) {
+        [wv evaluateJavaScript:@"window.__swRemote&&window.__swRemote('pause')" completionHandler:nil];
+        return MPRemoteCommandHandlerStatusSuccess;
+    }];
+    [rc.nextTrackCommand addTargetWithHandler:^MPRemoteCommandHandlerStatus(MPRemoteCommandEvent *e) {
+        [wv evaluateJavaScript:@"window.__swRemote&&window.__swRemote('next')" completionHandler:nil];
+        return MPRemoteCommandHandlerStatusSuccess;
+    }];
+    [rc.previousTrackCommand addTargetWithHandler:^MPRemoteCommandHandlerStatus(MPRemoteCommandEvent *e) {
+        [wv evaluateJavaScript:@"window.__swRemote&&window.__swRemote('prev')" completionHandler:nil];
+        return MPRemoteCommandHandlerStatusSuccess;
+    }];
+    [rc.changePlaybackPositionCommand addTargetWithHandler:^MPRemoteCommandHandlerStatus(MPRemoteCommandEvent *e) {
+        MPChangePlaybackPositionCommandEvent *pe = (MPChangePlaybackPositionCommandEvent *)e;
+        NSString *js = [NSString stringWithFormat:@"window.__swRemote&&window.__swRemote('seek',%f)", pe.positionTime];
+        [wv evaluateJavaScript:js completionHandler:nil];
+        return MPRemoteCommandHandlerStatusSuccess;
+    }];
+}
+
 - (void)scene:(UIScene *)scene willConnectToSession:(UISceneSession *)session
       options:(UISceneConnectionOptions *)options {
     UIWindowScene *ws = (UIWindowScene *)scene;
@@ -110,7 +176,6 @@ static NSString *const SW_BRIDGE_JS =
     bridge.webView = wv;
     root.wv = wv;
     [root.view addSubview:wv];
-    
     wv.scrollView.contentInsetAdjustmentBehavior = UIScrollViewContentInsetAdjustmentNever;
     wv.translatesAutoresizingMaskIntoConstraints = NO;
     [NSLayoutConstraint activateConstraints:@[
@@ -119,6 +184,8 @@ static NSString *const SW_BRIDGE_JS =
         [wv.leadingAnchor  constraintEqualToAnchor:root.view.leadingAnchor],
         [wv.trailingAnchor constraintEqualToAnchor:root.view.trailingAnchor]
     ]];
+
+    [self setupRemoteCommands:wv];
 
     dispatch_async(dispatch_get_global_queue(0, 0), ^{
         AVAudioSession *sess = [AVAudioSession sharedInstance];
@@ -131,8 +198,7 @@ static NSString *const SW_BRIDGE_JS =
         NSURL *nu = [NSURL fileURLWithPath:path];
         [wv loadFileURL:nu allowingReadAccessToURL:[NSBundle mainBundle].bundleURL];
     } else {
-        NSString *html = @"<body style='background:#08080d;color:#fff;font-family:-apple-system;"
-          @"padding:40px'><h2>index.html не найден</h2></body>";
+        NSString *html = @"<body style='background:#08080d;color:#fff;font-family:-apple-system;padding:40px'><h2>index.html not found</h2></body>";
         [wv loadHTMLString:html baseURL:nil];
     }
 
