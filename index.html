@@ -26,7 +26,6 @@ body{background:var(--bg);color:#f5f5f7;overflow:hidden;user-select:none;-webkit
 button{font-family:inherit;cursor:pointer}
 img{-webkit-user-drag:none}
 
-/* ---------- каркас ---------- */
 #app{height:100vh;height:100dvh;display:flex;flex-direction:column;position:relative}
 #screens{flex:1;position:relative;overflow:hidden}
 .screen{position:absolute;inset:0;display:none}
@@ -44,7 +43,6 @@ img{-webkit-user-drag:none}
 .hint{font-size:13px;color:var(--t2);margin-bottom:10px;font-weight:600}
 .sentinel{height:4px}
 
-/* ---------- поиск ---------- */
 .searchbar{display:flex;align-items:center;gap:9px;background:#15151f;border:1px solid var(--line);
   border-radius:14px;padding:0 12px;height:46px;margin-bottom:16px}
 .searchbar svg{flex:none;opacity:.5}
@@ -53,7 +51,6 @@ img{-webkit-user-drag:none}
 .searchbar input::-webkit-search-cancel-button{display:none}
 .qclear{background:none;border:none;color:var(--t2);width:24px;height:24px;display:grid;place-items:center;flex:none}
 
-/* ---------- чипы / сегменты ---------- */
 .chips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px}
 .chips.scrollx{flex-wrap:nowrap;overflow-x:auto;padding-bottom:4px;scrollbar-width:none}
 .chips.scrollx::-webkit-scrollbar{display:none}
@@ -65,7 +62,6 @@ img{-webkit-user-drag:none}
 .seg button{flex:1;padding:9px;border:none;background:none;color:var(--t2);font-size:14px;font-weight:600;border-radius:9px;transition:.18s}
 .seg button.on{background:#262636;color:#fff}
 
-/* ---------- список треков ---------- */
 .row-t{display:flex;gap:12px;align-items:center;padding:8px 6px;border-radius:14px;transition:background .15s}
 .row-t:active{background:rgba(255,255,255,.06)}
 .thumb{position:relative;width:56px;height:56px;border-radius:11px;overflow:hidden;flex:none;background:#1d1d2b}
@@ -83,7 +79,6 @@ img{-webkit-user-drag:none}
 @keyframes pop{0%{transform:scale(1)}40%{transform:scale(1.4)}100%{transform:scale(1)}}
 .heart.on svg,.np-like.on svg{animation:pop .35s ease}
 
-/* ---------- плеер: живой эквалайзер и свечение ---------- */
 .np-wave{display:flex;gap:3px;align-items:flex-end;justify-content:center;height:26px;margin:10px 0 4px}
 .np-wave i{width:3px;border-radius:2px;background:linear-gradient(180deg,#ff9500,#ff5500);height:6px;
   animation:wv 1s ease-in-out infinite;opacity:.9}
@@ -106,7 +101,6 @@ body:not(.paused) .np-art{animation:glowp 3.4s ease-in-out infinite}
 body.paused .eq i{animation-play-state:paused;height:4px}
 @keyframes eq{0%,100%{height:4px}50%{height:11px}}
 
-/* ---------- скелетоны и пустые экраны ---------- */
 .skrow{display:flex;gap:12px;padding:8px 6px;align-items:center}
 .sk{background:linear-gradient(100deg,#14141f 40%,#1f1f2e 50%,#14141f 60%);background-size:200% 100%;animation:sk 1.2s infinite;border-radius:10px}
 @keyframes sk{to{background-position:-200% 0}}
@@ -115,7 +109,6 @@ body.paused .eq i{animation-play-state:paused;height:4px}
 .empty b{display:block;color:#f5f5f7;font-size:17px;margin-bottom:6px;font-weight:700}
 .empty p{font-size:13.5px;line-height:1.5;margin-bottom:16px}
 
-/* ---------- таб-бар ---------- */
 .tabbar{position:absolute;left:0;right:0;bottom:0;display:flex;z-index:40;
   background:rgba(11,11,19,.85);backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);
   border-top:1px solid var(--line);padding:7px 8px calc(7px + var(--sb))}
@@ -124,7 +117,6 @@ body.paused .eq i{animation-play-state:paused;height:4px}
 .tab span{font-size:10px;font-weight:600;letter-spacing:.2px}
 .tab svg{width:24px;height:24px}
 
-/* ---------- мини-плеер ---------- */
 .mini{position:absolute;left:10px;right:10px;bottom:calc(60px + var(--sb) + 8px);height:62px;display:flex;align-items:center;gap:10px;
   background:rgba(25,25,40,.92);backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);
   border:1px solid rgba(255,255,255,.1);border-radius:16px;padding:0 6px 0 8px;z-index:39;overflow:hidden;
@@ -137,7 +129,6 @@ body.paused .eq i{animation-play-state:paused;height:4px}
 .mini-play,.mini-next{width:44px;height:44px;flex:none;display:grid;place-items:center;background:none;border:none;color:#f5f5f7}
 .mini-play:active,.mini-next:active{transform:scale(.9)}
 
-/* ---------- большой плеер ---------- */
 .np{position:fixed;inset:0;z-index:100;transform:translateY(103%);visibility:hidden;
   transition:transform .45s cubic-bezier(.32,.72,.25,1),visibility .45s}
 .np.open{transform:translateY(0);visibility:visible}
@@ -191,7 +182,6 @@ body.paused .np-art{transform:scale(.93)}
 .np-quebtn{align-self:center;padding:9px 22px;border-radius:20px;background:rgba(255,255,255,.09);border:none;color:#f5f5f7;font-size:13.5px;font-weight:600;margin-top:6px}
 .np-quebtn:active{transform:scale(.96)}
 
-/* ---------- очередь ---------- */
 .qs{position:fixed;inset:0;z-index:120;visibility:hidden;pointer-events:none}
 .qs.open{visibility:visible;pointer-events:auto}
 .qs-bd{position:absolute;inset:0;background:rgba(0,0,0,.55);opacity:0;transition:opacity .35s}
@@ -204,7 +194,6 @@ body.paused .np-art{transform:scale(.93)}
 .qs-title{font-size:17px;font-weight:700;margin-bottom:8px;flex:none}
 #qs-list{overflow-y:auto;-webkit-overflow-scrolling:touch}
 
-/* ---------- настройки ---------- */
 .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px;margin-bottom:14px}
 .card-h{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--t2);margin-bottom:10px}
 .row{display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:15px;padding:5px 0}
@@ -226,7 +215,6 @@ body.paused .np-art{transform:scale(.93)}
 .switch input:checked + i{background:#30d158}
 .switch input:checked + i::after{left:22px}
 
-/* ---------- тосты ---------- */
 .toast{position:fixed;top:calc(var(--st) + 12px);left:50%;transform:translateX(-50%) translateY(-16px);
   background:rgba(30,30,46,.96);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
   color:#f5f5f7;padding:10px 18px;border-radius:22px;font-size:14px;font-weight:600;z-index:300;opacity:0;
@@ -239,7 +227,7 @@ body.paused .np-art{transform:scale(.93)}
 
   <main id="screens">
 
-    <!-- ======== ПОИСК ======== -->
+    
     <section class="screen" id="scr-search">
       <div class="scroll">
         <h1 class="ltitle">Поиск</h1>
@@ -261,7 +249,7 @@ body.paused .np-art{transform:scale(.93)}
       </div>
     </section>
 
-    <!-- ======== ОБЗОР ======== -->
+    
     <section class="screen active" id="scr-discover">
       <div class="scroll" id="discover-scroll">
         <div class="hero">
@@ -274,7 +262,7 @@ body.paused .np-art{transform:scale(.93)}
       </div>
     </section>
 
-    <!-- ======== БИБЛИОТЕКА ======== -->
+    
     <section class="screen" id="scr-library">
       <div class="scroll">
         <h1 class="ltitle">Библиотека</h1>
@@ -286,7 +274,7 @@ body.paused .np-art{transform:scale(.93)}
       </div>
     </section>
 
-    <!-- ======== НАСТРОЙКИ ======== -->
+    
     <section class="screen" id="scr-settings">
       <div class="scroll">
         <h1 class="ltitle">Настройки</h1>
@@ -320,7 +308,7 @@ body.paused .np-art{transform:scale(.93)}
     </section>
   </main>
 
-  <!-- ======== МИНИ-ПЛЕЕР ======== -->
+  
   <div id="mini" class="mini" hidden>
     <div class="mini-bar" id="mini-bar"></div>
     <img class="mini-art" id="mini-art" alt="">
@@ -332,7 +320,7 @@ body.paused .np-art{transform:scale(.93)}
     <button class="mini-next" id="mini-next" aria-label="Далее"></button>
   </div>
 
-  <!-- ======== ТАБ-БАР ======== -->
+  
   <nav class="tabbar">
     <button class="tab" data-s="search">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7.5"/><path d="m20.5 20.5-4.3-4.3"/></svg>
@@ -352,7 +340,7 @@ body.paused .np-art{transform:scale(.93)}
     </button>
   </nav>
 
-  <!-- ======== БОЛЬШОЙ ПЛЕЕР ======== -->
+  
   <div id="np" class="np">
     <img id="np-bg" class="np-bg" alt="">
     <div class="np-veil"></div>
@@ -394,7 +382,7 @@ body.paused .np-art{transform:scale(.93)}
     </div>
   </div>
 
-  <!-- ======== ОЧЕРЕДЬ ======== -->
+  
   <div id="qs" class="qs">
     <div class="qs-bd" id="qs-bd"></div>
     <div class="qs-panel">
@@ -409,7 +397,7 @@ body.paused .np-art{transform:scale(.93)}
 
 <script>
 'use strict';
-/* ============================== утилиты ============================== */
+
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -425,7 +413,6 @@ const LS = {
   set(k, v){ try { localStorage.setItem('sw_' + k, JSON.stringify(v)); } catch {} }
 };
 
-/* ============================== иконки ============================== */
 const I = {
   play:  '<svg viewBox="0 0 24 24" width="27" height="27" fill="currentColor"><path d="M8 5.14v13.72c0 .8.87 1.3 1.56.9l11.1-6.86a1.05 1.05 0 0 0 0-1.8L9.56 4.24A1.05 1.05 0 0 0 8 5.14Z"/></svg>',
   pause: '<svg viewBox="0 0 24 24" width="26" height="26" fill="currentColor"><rect x="6" y="4" width="4.6" height="16" rx="1.7"/><rect x="13.4" y="4" width="4.6" height="16" rx="1.7"/></svg>',
@@ -442,7 +429,6 @@ const PLACEHOLDER = 'data:image/svg+xml,' + encodeURIComponent(
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2b2b40"/><stop offset="1" stop-color="#191926"/></linearGradient></defs><rect width="120" height="120" fill="url(#g)"/><path d="M52 82c-7.2 0-13-5.8-13-13s5.8-13 13-13c1.4 0 2.7.2 4 .6V42h-5v-5h10v32.2c0 7-5.8 12.8-13 12.8Z" fill="#45455e" transform="translate(9 -4)"/></svg>');
 const EQ = '<span class="eq"><i></i><i></i><i></i></span>';
 
-/* ============================== состояние ============================== */
 const state = {
   likes: LS.get('likes', []),
   history: LS.get('history', []),
@@ -451,7 +437,6 @@ const state = {
   repeat: LS.get('repeat', 'off')
 };
 
-/* ============================== транспорт и API ============================== */
 const API = 'https://api-v2.soundcloud.com';
 const FALLBACK_CID = 'UMY1dzQ68n2QbCuypNe8JOivmV2FO2Ep';
 let cid = LS.get('cid', null) || FALLBACK_CID;
@@ -530,7 +515,6 @@ async function apiGet(path, params = {}, retried = false){
   return j;
 }
 
-/* ============================== данные SoundCloud ============================== */
 function normTrack(t){
   return {
     id: t.id,
@@ -570,7 +554,6 @@ async function getStreamUrl(t){
   return j.url;
 }
 
-/* ============================== плеер ============================== */
 const audio = new Audio();
 audio.preload = 'auto';
 const P = { q: [], i: -1, playing: false, loadId: 0, mediaUrl: '', viaProxy: false };
@@ -631,7 +614,6 @@ async function extendRelated(){
   } catch { toast('Очередь закончилась'); }
 }
 
-/* --- события аудио --- */
 audio.addEventListener('play',  () => { P.playing = true;  syncPlayUI(); });
 audio.addEventListener('pause', () => { P.playing = false; syncPlayUI(); });
 audio.addEventListener('ended', () => {
@@ -650,7 +632,7 @@ audio.addEventListener('timeupdate', () => {
 });
 audio.addEventListener('error', () => {
   if (!audio.src || !current()) return;
-  // одна попытка через прокси (если медиа-CDN недоступен напрямую)
+
   if (!P.viaProxy && localProxy && P.mediaUrl){
     P.viaProxy = true;
     audio.src = '/sc?url=' + encodeURIComponent(P.mediaUrl);
@@ -661,7 +643,6 @@ audio.addEventListener('error', () => {
   next(true);
 });
 
-/* --- Media Session (эcran блокировки) --- */
 function updatePositionState(){
   if ('mediaSession' in navigator && navigator.mediaSession.setPositionState && isFinite(audio.duration) && audio.duration > 0){
     try { navigator.mediaSession.setPositionState({ duration: audio.duration, playbackRate: audio.playbackRate, position: Math.min(audio.currentTime, audio.duration) }); } catch {}
@@ -685,7 +666,6 @@ function setSession(t){
   } catch {}
 }
 
-/* ============================== лайки / история ============================== */
 const isLiked = id => state.likes.some(x => x.id === id);
 function findTrack(id){
   let t = P.q.find(x => x.id === id) || (current() && current().id === id ? current() : null);
@@ -713,7 +693,6 @@ function pushHistory(t){
   if (curScreen === 'library' && libMode === 'history') renderLib();
 }
 
-/* ============================== рендер списков ============================== */
 const skeleton = n => Array.from({ length: n }, () =>
   '<div class="skrow"><div class="sk" style="width:56px;height:56px;flex:none"></div><div style="flex:1"><div class="sk" style="height:14px;width:72%;margin-bottom:9px"></div><div class="sk" style="height:11px;width:42%"></div></div></div>').join('');
 const emptyState = (title, text, retry) =>
@@ -767,7 +746,6 @@ function syncHearts(id){
   if (t && (!id || id === t.id)){ const on = isLiked(t.id); nb.classList.toggle('on', on); nb.innerHTML = on ? I.heartF : I.heart; }
 }
 
-/* ============================== экран: поиск ============================== */
 const searchState = { q: '', offset: 0, loading: false, done: true, list: null };
 async function runSearch(q, reset){
   if (q.length < 2){ $('#search-home').style.display = ''; return; }
@@ -806,7 +784,6 @@ $('#sugg').addEventListener('click', e => {
   runSearch(b.dataset.sq, true);
 });
 
-/* ---------- история поиска ---------- */
 function renderSearchHistory(){
   const h = LS.get('shistory', []);
   $('#hist-hint').hidden = !h.length;
@@ -825,7 +802,6 @@ function pushSearchHistory(q){
 }
 renderSearchHistory();
 
-/* ============================== экран: обзор ============================== */
 const GENRES = [
   ['Всё', 'popular'], ['Хип-хоп', 'hip hop'], ['Поп', 'pop'], ['Электроника', 'electronic'],
   ['Хаус', 'house'], ['Техно', 'techno'], ['Дабстеп', 'dubstep'], ['Трэп', 'trap'],
@@ -869,7 +845,6 @@ async function loadDiscover(reset){
   discoverState.loading = false;
 }
 
-/* ============================== экран: библиотека ============================== */
 let libMode = 'likes';
 $('#lib-seg').addEventListener('click', e => {
   const b = e.target.closest('button'); if (!b) return;
@@ -888,7 +863,6 @@ function renderLib(){
   }
 }
 
-/* ============================== навигация ============================== */
 let curScreen = 'discover';
 function showScreen(s){
   curScreen = s;
@@ -899,7 +873,6 @@ function showScreen(s){
 }
 $$('.tab').forEach(b => b.addEventListener('click', () => showScreen(b.dataset.s)));
 
-/* ============================== мини-плеер ============================== */
 function showMini(t){
   const m = $('#mini'); m.hidden = false;
   $('#mini-art').src = t.art || PLACEHOLDER;
@@ -912,7 +885,6 @@ $('#mini').addEventListener('click', e => {
   openNP();
 });
 
-/* ============================== большой плеер ============================== */
 function setNP(t){
   $('#np-art').src = t.art || PLACEHOLDER;
   $('#np-bg').src = t.art || PLACEHOLDER;
@@ -961,7 +933,6 @@ function syncPlayUI(){
   $('#mini-play').innerHTML = P.playing ? I.pause : I.play;
 }
 
-/* --- перемотка --- */
 const seekEl = $('#seek');
 let seekDrag = false;
 seekEl.addEventListener('input', () => {
@@ -977,7 +948,6 @@ seekEl.addEventListener('change', () => {
 });
 function seekFill(p){ seekEl.style.setProperty('--val', p + '%'); }
 
-/* --- свайп вниз для закрытия --- */
 (() => {
   const np = $('#np'), art = $('#np-drag');
   let y0 = null, dy = 0;
@@ -992,7 +962,6 @@ function seekFill(p){ seekEl.style.setProperty('--val', p + '%'); }
   window.addEventListener('mouseup', end);
 })();
 
-/* ============================== очередь ============================== */
 function renderQueue(){
   const c = $('#qs-list');
   if (!P.q.length){ c.innerHTML = '<div class="empty"><b>Очередь пуста</b><p>Выберите трек в поиске или обзоре</p></div>'; return; }
@@ -1010,7 +979,6 @@ $('#qs-list').addEventListener('click', e => {
 $('#np-queue').addEventListener('click', () => $('#qs').classList.add('open'));
 $('#qs-bd').addEventListener('click', () => $('#qs').classList.remove('open'));
 
-/* ---------- скорость и таймер сна ---------- */
 const SPEEDS = [1, 1.25, 1.5, 2, 0.75];
 let speedIdx = 0;
 $('#np-speed').addEventListener('click', () => {
@@ -1023,7 +991,7 @@ $('#np-speed').addEventListener('click', () => {
   toast('Скорость: ' + v + '×');
 });
 
-let sleepMode = 0, sleepTimerT = null;   /* 0 выкл; минуты; 'end' — конец трека */
+let sleepMode = 0, sleepTimerT = null;   
 function resetSleep(msg){
   clearTimeout(sleepTimerT); sleepTimerT = null; sleepMode = 0;
   const b = $('#np-timer');
@@ -1044,13 +1012,11 @@ $('#np-timer').addEventListener('click', () => {
   toast('Таймер сна: ' + next + ' мин');
 });
 
-/* декоративный эквалайзер в плеере */
 $('#np-wave').innerHTML = Array.from({ length: 28 }, () => {
   const d = (0.55 + Math.random() * 0.9).toFixed(2), dl = (Math.random() * 1.2).toFixed(2);
   return `<i style="animation-duration:${d}s;animation-delay:${dl}s"></i>`;
 }).join('');
 
-/* ============================== настройки ============================== */
 function updateCidUI(){
   const b = $('#cid-status');
   b.textContent = cidState === 'ok' ? 'работает' : cidState === 'err' ? 'ошибка' : 'проверка…';
@@ -1082,7 +1048,6 @@ $('#clr-likes').addEventListener('click', () => {
   toast('Список очищен');
 });
 
-/* ============================== подгрузка при скролле ============================== */
 function watchSentinel(sentSel, rootSel, cb){
   const sent = $(sentSel), root = $(rootSel);
   if (!sent || !root) return;
@@ -1095,7 +1060,6 @@ watchSentinel('#chart-sent', '#discover-scroll', () => {
   if (!discoverState.loading && !discoverState.done) loadDiscover(false);
 });
 
-/* ============================== init ============================== */
 (async () => {
   $('#mini-play').innerHTML = I.play;
   $('#mini-next').innerHTML = I.next;

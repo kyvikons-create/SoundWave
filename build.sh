@@ -1,5 +1,5 @@
-#!/bin/bash
-# Сборка SoundWave.ipa на macOS-раннере GitHub Actions (настоящий iOS SDK)
+
+
 set -euo pipefail
 
 xcrun --sdk iphoneos clang \

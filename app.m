@@ -1,4 +1,4 @@
-/* SoundWave — финальная нативная оболочка (scene lifecycle, точный лэйаут) */
+
 #import <UIKit/UIKit.h>
 #import <WebKit/WebKit.h>
 #import <AVFAudio/AVFAudio.h>
@@ -18,7 +18,6 @@ static NSString *const SW_BRIDGE_JS =
   @"if(o.err)p.j(new Error(o.err));else p.r({status:o.status,text:o.text});};"
   @"})();";
 
-/* ---------- сетевой мост ---------- */
 @interface SWBridge : NSObject <WKScriptMessageHandler>
 @property (weak, nonatomic) WKWebView *webView;
 @end
@@ -63,7 +62,6 @@ static NSString *const SW_BRIDGE_JS =
 }
 @end
 
-/* ---------- корневой VC: вебвью всегда точно в размер экрана ---------- */
 @interface SWRootVC : UIViewController
 @property (strong, nonatomic) WKWebView *wv;
 @end
@@ -72,14 +70,13 @@ static NSString *const SW_BRIDGE_JS =
 - (void)viewDidLayoutSubviews {
     [super viewDidLayoutSubviews];
     if (self.wv && !self.wv.translatesAutoresizingMaskIntoConstraints) {
-        /* констрейнты уже держат размер — ничего не делаем */
+        
         return;
     }
     if (self.wv) self.wv.frame = self.view.bounds;
 }
 @end
 
-/* ---------- делегат сцены ---------- */
 @interface SWSceneDelegate : NSObject <UIWindowSceneDelegate>
 @property (strong, nonatomic) UIWindow *window;
 @end
@@ -113,7 +110,7 @@ static NSString *const SW_BRIDGE_JS =
     bridge.webView = wv;
     root.wv = wv;
     [root.view addSubview:wv];
-    /* жёсткие пины ко всем четырём краям — экран заполняется целиком */
+    
     wv.scrollView.contentInsetAdjustmentBehavior = UIScrollViewContentInsetAdjustmentNever;
     wv.translatesAutoresizingMaskIntoConstraints = NO;
     [NSLayoutConstraint activateConstraints:@[
@@ -143,7 +140,6 @@ static NSString *const SW_BRIDGE_JS =
 }
 @end
 
-/* ---------- делегат приложения ---------- */
 @interface SWAppDelegate : NSObject <UIApplicationDelegate>
 @end
 
