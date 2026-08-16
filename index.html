@@ -1165,7 +1165,6 @@ function setNP(t){
   $('#tdur').textContent = fmt(t.dur);
   seekEl.value = 0; seekFill(0);
   syncHearts(t.id);
-  setSession(t);
   renderQueue();
   resetLyrics();
   nativeNP();
