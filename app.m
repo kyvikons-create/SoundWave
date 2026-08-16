@@ -71,7 +71,11 @@ static NSString *const SW_BRIDGE_JS =
 @implementation SWRootVC
 - (void)viewDidLayoutSubviews {
     [super viewDidLayoutSubviews];
-    if (self.wv) self.wv.frame = self.view.bounds; /* никаких чёрных полос */
+    if (self.wv && !self.wv.translatesAutoresizingMaskIntoConstraints) {
+        /* констрейнты уже держат размер — ничего не делаем */
+        return;
+    }
+    if (self.wv) self.wv.frame = self.view.bounds;
 }
 @end
 
@@ -105,11 +109,19 @@ static NSString *const SW_BRIDGE_JS =
     cfg.userContentController = ucc;
 
     WKWebView *wv = [[WKWebView alloc] initWithFrame:ws.coordinateSpace.bounds configuration:cfg];
-    wv.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
     wv.backgroundColor = [UIColor colorWithWhite:0 alpha:1];
     bridge.webView = wv;
     root.wv = wv;
     [root.view addSubview:wv];
+    /* жёсткие пины ко всем четырём краям — экран заполняется целиком */
+    wv.scrollView.contentInsetAdjustmentBehavior = UIScrollViewContentInsetAdjustmentNever;
+    wv.translatesAutoresizingMaskIntoConstraints = NO;
+    [NSLayoutConstraint activateConstraints:@[
+        [wv.topAnchor      constraintEqualToAnchor:root.view.topAnchor],
+        [wv.bottomAnchor   constraintEqualToAnchor:root.view.bottomAnchor],
+        [wv.leadingAnchor  constraintEqualToAnchor:root.view.leadingAnchor],
+        [wv.trailingAnchor constraintEqualToAnchor:root.view.trailingAnchor]
+    ]];
 
     dispatch_async(dispatch_get_global_queue(0, 0), ^{
         AVAudioSession *sess = [AVAudioSession sharedInstance];
