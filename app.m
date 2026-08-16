@@ -145,8 +145,8 @@ static void SWLog(NSString *s) {
 - (UISceneConfiguration *)application:(UIApplication *)application
     configurationForConnectingSceneSession:(UISceneSession *)connectingSceneSession
     options:(UISceneConnectionOptions *)options {
-    UISceneConfiguration *cfg = [[UISceneConfiguration alloc] init];
-    cfg.name = @"Default";
+    UISceneConfiguration *cfg = [[UISceneConfiguration alloc]
+        initWithName:@"Default" sessionRole:connectingSceneSession.role];
     cfg.delegateClass = [SWSceneDelegate class];
     return cfg;
 }
