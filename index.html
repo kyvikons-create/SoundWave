@@ -516,7 +516,7 @@ const state = {
   stats: LS.get('stats', {sec:0, art:{}, day:{}, tracks:0}),
   autoRelated: LS.get('autorel', true),
   fullOnly: LS.get('fullonly', false),
-  viz: LS.get('viz', true),
+  viz: LS.get('viz', false),
   amoled: LS.get('amoled', false),
   accent: LS.get('accent', 'orange'),
   shuffle: LS.get('shuffle', false),
@@ -684,7 +684,6 @@ async function getStreamUrl(t){
 
 const audio = new Audio();
 audio.preload = 'auto';
-if (state.viz) audio.crossOrigin = 'anonymous';
 const P = { q: [], i: -1, playing: false, loadId: 0, mediaUrl: '', viaProxy: false, restored: false };
 let nowSource = 'Обзор';
 
@@ -703,6 +702,7 @@ async function loadTrack(autoplay){
     const url = await getStreamUrl(t);
     if (my !== P.loadId) return;
     P.mediaUrl = url; P.viaProxy = false;
+    audio.crossOrigin = (state.viz && !viz.broken) ? 'anonymous' : null;
     audio.src = url;
     if (P.resumePos > 0){ const rp = P.resumePos; P.resumePos = 0;
       audio.addEventListener('loadedmetadata', function once(){ audio.removeEventListener('loadedmetadata', once); try{ audio.currentTime = rp; }catch{} });
@@ -749,7 +749,11 @@ async function extendRelated(){
 
 let seekDrag = false;
 let statPend = 0, npSent = 0, sessSaved = 0;
-audio.addEventListener('play',  () => { P.playing = true;  syncPlayUI(); resumeViz(); nativeNP(); });
+audio.addEventListener('play',  () => {
+  P.playing = true; syncPlayUI(); nativeNP();
+  if (state.viz && !viz.ctx && !viz.broken) initViz();
+  resumeViz();
+});
 audio.addEventListener('pause', () => { P.playing = false; syncPlayUI(); nativeNP(); flushStats(); saveSession(); });
 audio.addEventListener('ended', () => {
   if (sleepMode === 'end'){ resetSleep('Конец трека — спокойной ночи 🌙'); audio.pause(); return; }
@@ -1329,7 +1333,7 @@ $('#np-timer').addEventListener('click', () => {
   toast('Таймер сна: ' + nx + ' мин');
 });
 
-const viz = { ctx: null, an: null, data: null, broken: false };
+const viz = { ctx: null, an: null, data: null, broken: false, zeroSince: 0 };
 function initViz(){
   if (!state.viz || viz.ctx || viz.broken) return;
   try {
@@ -1342,9 +1346,16 @@ function initViz(){
     viz.an.smoothingTimeConstant = 0.82;
     viz.data = new Uint8Array(viz.an.frequencyBinCount);
     src.connect(viz.an); viz.an.connect(viz.ctx.destination);
+    viz.ctx.resume().catch(()=>{});
   } catch { viz.broken = true; }
 }
 function resumeViz(){ if (viz.ctx && viz.ctx.state === 'suspended') viz.ctx.resume().catch(()=>{}); }
+function disableVizAndReload(){
+  state.viz = false; viz.broken = true;
+  LS.set('viz', false);
+  toast('Реальный спектр недоступен для этого потока — перезапускаю');
+  setTimeout(() => location.reload(), 1400);
+}
 const vizCv = $('#viz'), vizCtx = vizCv.getContext('2d');
 let vizPhase = 0;
 function drawViz(ts){
@@ -1356,16 +1367,23 @@ function drawViz(ts){
   const N = 44;
   vizPhase += 0.045;
   let levels = null;
-  if (viz.an && !viz.broken){
+  const playing = !document.body.classList.contains('paused');
+  if (viz.an && !viz.broken && state.viz){
     viz.an.getByteFrequencyData(viz.data);
     levels = [];
+    let sum = 0;
     const usable = Math.floor(viz.data.length * 0.72);
     for (let i = 0; i < N; i++){
       const idx = Math.floor(Math.pow(i / N, 1.5) * usable);
-      levels.push((viz.data[idx] || 0) / 255);
+      const v = (viz.data[idx] || 0) / 255;
+      sum += v;
+      levels.push(v);
     }
+    if (playing && sum < 0.01){
+      if (!viz.zeroSince) viz.zeroSince = ts;
+      else if (ts - viz.zeroSince > 7000) { disableVizAndReload(); return; }
+    } else viz.zeroSince = 0;
   }
-  const playing = !document.body.classList.contains('paused');
   for (let i = 0; i < N; i++){
     let lv;
     if (levels){ lv = levels[i]; }
@@ -1540,33 +1558,66 @@ async function fetchLyrics(track){
   if (lyrCache[track.id]) return lyrCache[track.id];
   const title = cleanTitle(track.title);
   let res = { plain: '', synced: '', src: '' };
+  const withTimeout = (p, ms) => Promise.race([p, new Promise(r => setTimeout(() => r(null), ms))]);
   try {
-    const r = await rawFetch('https://lrclib.net/api/search?track_name=' + encodeURIComponent(title) + '&artist_name=' + encodeURIComponent(track.artist));
-    const j = await r.json();
-    if (Array.isArray(j) && j.length){
-      const best = j.find(x => x.syncedLyrics) || j[0];
-      res.synced = best.syncedLyrics || '';
-      res.plain = best.plainLyrics || '';
-      res.src = 'lrclib';
+    const r = await withTimeout(rawFetch('https://lrclib.net/api/search?track_name=' + encodeURIComponent(title) + '&artist_name=' + encodeURIComponent(track.artist)), 9000);
+    if (r){
+      const j = await r.json();
+      if (Array.isArray(j) && j.length){
+        const best = j.find(x => x.syncedLyrics) || j[0];
+        res.synced = best.syncedLyrics || '';
+        res.plain = best.plainLyrics || '';
+        res.src = 'lrclib';
+      }
     }
   } catch {}
   if (!res.synced && !res.plain){
     try {
-      const r2 = await rawFetch('https://genius.com/api/search/multi?q=' + encodeURIComponent(title + ' ' + track.artist));
-      const j2 = await r2.json();
-      const hits = [];
-      for (const sec of (j2.response && j2.response.sections) || [])
-        for (const h of sec.hits || []) if (h.result && h.result.url && h.result.url.includes('/lyrics')) hits.push(h.result.url);
-      if (hits.length){
-        const r3 = await rawFetch(hits[0]);
-        const html = await r3.text();
-        const blocks = [...html.matchAll(/<div[^>]*class="[^"]*Lyrics__Container[^"]*"[^>]*>([\s\S]*?)<\/div>/g)].map(m => m[1]).join('\n');
-        if (blocks){
-          const text = blocks
-            .replace(/<br\s*\/?>/gi, '\n').replace(/<p[^>]*>/gi, '\n').replace(/<\/p>/gi, '\n')
-            .replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&#x27;|&#39;/g, "'")
-            .replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/\n{3,}/g, '\n\n').trim();
-          if (text.length > 40){ res.plain = text; res.src = 'genius'; }
+      const r = await withTimeout(rawFetch('https://lrclib.net/api/search?q=' + encodeURIComponent(title + ' ' + track.artist)), 9000);
+      if (r){
+        const j = await r.json();
+        if (Array.isArray(j) && j.length){
+          const best = j.find(x => x.syncedLyrics) || j[0];
+          res.synced = best.syncedLyrics || '';
+          res.plain = best.plainLyrics || '';
+          res.src = 'lrclib';
+        }
+      }
+    } catch {}
+  }
+  if (!res.synced && !res.plain){
+    try {
+      const r = await withTimeout(rawFetch('https://api.lyrics.ovh/v1/' + encodeURIComponent(track.artist) + '/' + encodeURIComponent(title)), 9000);
+      if (r && r.ok){
+        const j = await r.json();
+        if (j && j.lyrics && j.lyrics.trim().length > 40){
+          res.plain = j.lyrics.replace(/\r\n/g, '\n').trim();
+          res.src = 'lyricsovh';
+        }
+      }
+    } catch {}
+  }
+  if (!res.synced && !res.plain){
+    try {
+      const r2 = await withTimeout(rawFetch('https://genius.com/api/search/multi?q=' + encodeURIComponent(title + ' ' + track.artist)), 9000);
+      if (r2){
+        const j2 = await r2.json();
+        const hits = [];
+        for (const sec of (j2.response && j2.response.sections) || [])
+          for (const h of sec.hits || []) if (h.result && h.result.url && h.result.url.includes('/lyrics')) hits.push(h.result.url);
+        if (hits.length){
+          const r3 = await withTimeout(rawFetch(hits[0]), 12000);
+          if (r3){
+            const html = await r3.text();
+            const blocks = [...html.matchAll(/<div[^>]*class="[^"]*Lyrics__Container[^"]*"[^>]*>([\s\S]*?)<\/div>/g)].map(m => m[1]).join('\n');
+            if (blocks){
+              const text = blocks
+                .replace(/<br\s*\/?>/gi, '\n').replace(/<p[^>]*>/gi, '\n').replace(/<\/p>/gi, '\n')
+                .replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&#x27;|&#39;/g, "'")
+                .replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/\n{3,}/g, '\n\n').trim();
+              if (text.length > 40){ res.plain = text; res.src = 'genius'; }
+            }
+          }
         }
       }
     } catch {}
@@ -1661,9 +1712,16 @@ $('#opt-auto').addEventListener('change', e => { state.autoRelated = e.target.ch
 $('#opt-full').checked = state.fullOnly;
 $('#opt-full').addEventListener('change', e => { state.fullOnly = e.target.checked; LS.set('fullonly', state.fullOnly); toast(e.target.checked ? 'Фрагменты скрыты' : 'Показываю все треки'); });
 $('#opt-viz').checked = state.viz;
-$('#opt-viz').addEventListener('change', e => { state.viz = e.target.checked; LS.set('viz', state.viz);
-  if (state.viz && !viz.ctx && !viz.broken){ audio.crossOrigin = 'anonymous'; initViz(); }
-  toast(state.viz ? 'Визуализатор включён' : 'Визуализатор выключен'); });
+$('#opt-viz').addEventListener('change', e => {
+  state.viz = e.target.checked; LS.set('viz', state.viz);
+  if (state.viz){
+    toast('Реальный спектр включится после перезапуска приложения');
+    setTimeout(() => location.reload(), 1400);
+  } else {
+    toast('Спектр выключится после перезапуска приложения');
+    setTimeout(() => location.reload(), 1400);
+  }
+});
 $('#clr-hist').addEventListener('click', () => { state.history = []; LS.set('history', []); if (curScreen === 'library') renderLib(); toast('История очищена'); });
 $('#clr-likes').addEventListener('click', () => {
   if (!confirm('Удалить все любимые треки?')) return;
@@ -1707,7 +1765,6 @@ window.addEventListener('pagehide', saveSession);
   attachList($('#search-results'), 'Поиск');
   attachList($('#chart-list'), 'Обзор');
   attachList($('#lib-list'), 'Библиотека');
-  initViz();
   await probeLocal();
   const restored = restoreSession();
   if (restored) toast('Вернул прошлую сессию — нажмите ▶');
