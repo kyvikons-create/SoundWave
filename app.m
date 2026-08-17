@@ -39,8 +39,10 @@ static NSString *const SW_BRIDGE_JS =
     Class laCls = NSClassFromString(@"SWLiveActivity");
     if (laCls) [laCls performSelector:@selector(update:) withObject:d];
 
+    static NSString *lastArt = nil;
     NSString *art = d[@"art"];
-    if (art.length > 4) {
+    if (art.length > 4 && ![lastArt isEqualToString:art]) {
+        lastArt = [art copy];
         NSURL *au = [NSURL URLWithString:art];
         if (!au) return;
         [[[NSURLSession sharedSession] dataTaskWithURL:au
@@ -66,6 +68,12 @@ static NSString *const SW_BRIDGE_JS =
         UIImpactFeedbackStyle style = kind == 1 ? UIImpactFeedbackStyleMedium : UIImpactFeedbackStyleLight;
         UIImpactFeedbackGenerator *gen = [[UIImpactFeedbackGenerator alloc] initWithStyle:style];
         [gen impactOccurred];
+    } else if ([cmd isEqualToString:@"resumesession"]) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            AVAudioSession *sess = [AVAudioSession sharedInstance];
+            [sess setCategory:AVAudioSessionCategoryPlayback error:nil];
+            [sess setActive:YES error:nil];
+        });
     } else if ([cmd isEqualToString:@"keepawake"]) {
         [UIApplication sharedApplication].idleTimerDisabled = [d[@"on"] boolValue];
     } else if ([cmd isEqualToString:@"seticon"]) {

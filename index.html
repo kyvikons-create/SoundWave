@@ -796,6 +796,7 @@ let seekDrag = false;
 let statPend = 0, npSent = 0, sessSaved = 0;
 audio.addEventListener('play',  () => {
   P.playing = true; syncPlayUI(); nativeNP();
+  nativeCmd({cmd:'resumesession'});
   if (state.viz && !viz.ctx && !viz.broken) initViz();
   resumeViz();
 });
