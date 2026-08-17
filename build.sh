@@ -1,7 +1,7 @@
 set -euo pipefail
 
 SWIFT_OK=0
-xcrun --sdk iphoneos swiftc -target arm64-apple-ios16.1 \
+xcrun --sdk iphoneos swiftc -target arm64-apple-ios16.2 \
   -parse-as-library -emit-object \
   -o la.o LiveActivityBridge.swift 2>swift.log && SWIFT_OK=1 || {
   echo "== swift bridge не собрался, Live Activity отключён =="; cat swift.log | tail -5
@@ -37,7 +37,7 @@ done
 cp index.html "$APP/www/index.html"
 
 WIDGET_OK=0
-if xcrun --sdk iphoneos swiftc -target arm64-apple-ios16.1 \
+if xcrun --sdk iphoneos swiftc -target arm64-apple-ios16.2 \
     -parse-as-library -emit-library -Xlinker -bundle \
     -o Widget Widget.swift \
     -framework WidgetKit -framework SwiftUI 2>widget.log; then
@@ -72,7 +72,7 @@ if [ "$WIDGET_OK" = "1" ]; then
 	<key>CFBundleVersion</key>
 	<string>1</string>
 	<key>MinimumOSVersion</key>
-	<string>16.1</string>
+	<string>16.2</string>
 	<key>NSExtension</key>
 	<dict>
 		<key>NSExtensionPointIdentifier</key>
