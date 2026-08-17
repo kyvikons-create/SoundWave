@@ -1,6 +1,18 @@
 import Foundation
 import ActivityKit
 
+import Foundation
+
+struct SWNowPlayingAttributes: ActivityAttributes {
+    public struct ContentState: Codable, Hashable {
+        var pos: Double
+        var dur: Double
+        var playing: Bool
+    }
+    var title: String
+    var artist: String
+}
+
 @objcMembers
 final class SWLiveActivity: NSObject {
     private static var activity: Activity<SWNowPlayingAttributes>?
