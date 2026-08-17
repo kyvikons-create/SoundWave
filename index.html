@@ -1279,6 +1279,19 @@ $('#mini').addEventListener('click', e => {
   openNP();
 });
 
+function setWebSession(t){
+  if (!('mediaSession' in navigator)) return;
+  try {
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: t.title, artist: t.artist, album: 'SoundWave',
+      artwork: [{ src: t.art || PLACEHOLDER, sizes: '500x500', type: 'image/jpeg' }]
+    });
+    navigator.mediaSession.setActionHandler('play', () => audio.play().catch(()=>{}));
+    navigator.mediaSession.setActionHandler('pause', () => audio.pause());
+    navigator.mediaSession.setActionHandler('nexttrack', () => next());
+    navigator.mediaSession.setActionHandler('previoustrack', () => prev());
+  } catch {}
+}
 function setNP(t){
   $('#np-art').src = t.art || PLACEHOLDER;
   $('#np-bg').src = t.art || PLACEHOLDER;
@@ -1292,6 +1305,7 @@ function setNP(t){
   syncHearts(t.id);
   renderQueue();
   resetLyrics();
+  setWebSession(t);
   nativeNP();
 }
 const openNP  = () => { haptic(0); $('#np').classList.add('open'); };

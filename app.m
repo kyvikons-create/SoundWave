@@ -256,6 +256,12 @@ static NSString *const SW_BRIDGE_JS =
 
     [win makeKeyAndVisible];
 }
+
+- (void)sceneWillResignActive:(UIScene *)scene {
+    AVAudioSession *sess = [AVAudioSession sharedInstance];
+    [sess setCategory:AVAudioSessionCategoryPlayback error:nil];
+    [sess setActive:YES error:nil];
+}
 @end
 
 @interface SWAppDelegate : NSObject <UIApplicationDelegate>
