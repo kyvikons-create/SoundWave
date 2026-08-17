@@ -540,6 +540,13 @@ const LS = {
   set(k, v){ try { localStorage.setItem('sw_' + k, JSON.stringify(v)); } catch {} }
 };
 
+if (window.__TAURI__ && window.__TAURI__.http && !window.__swNativeFetch){
+  window.__swNativeFetch = async u => {
+    const r = await window.__TAURI__.http.fetch(u);
+    return { status: r.status, text: await r.text() };
+  };
+}
+
 const ACCENTS = {
   orange:['#ff5500','#ff9500','rgba(255,85,0,.16)','rgba(255,90,0,.45)'],
   green:['#30d158','#8affb5','rgba(48,209,88,.16)','rgba(48,209,88,.45)'],

@@ -36,6 +36,9 @@ static NSString *const SW_BRIDGE_JS =
     info[MPNowPlayingInfoPropertyPlaybackRate] = @(rate);
     [MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo = info;
 
+    Class laCls = NSClassFromString(@"SWLiveActivity");
+    if (laCls) [laCls performSelector:@selector(update:) withObject:d];
+
     NSString *art = d[@"art"];
     if (art.length > 4) {
         NSURL *au = [NSURL URLWithString:art];
