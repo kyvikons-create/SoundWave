@@ -19,6 +19,12 @@ cp SoundWave "$APP/SoundWave"
 cp Info.plist "$APP/Info.plist"
 cp icon120.png "$APP/AppIcon60x60@2x.png"
 cp icon180.png "$APP/AppIcon60x60@3x.png"
+for c in blue pink green; do
+  if [ -f "alt-$c-120.png" ]; then
+    cp "alt-$c-120.png" "$APP/alt-$c-120.png"
+    cp "alt-$c-180.png" "$APP/alt-$c-180.png"
+  fi
+done
 cp index.html "$APP/www/index.html"
 
 rm -f SoundWave.ipa

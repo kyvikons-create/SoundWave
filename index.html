@@ -212,6 +212,26 @@ html.amoled .btn{background:#16161c}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 .ptr{height:0;overflow:hidden;display:flex;align-items:center;justify-content:center;color:var(--acc2);transition:height .2s}
 .ptr svg{animation:spin 1s linear infinite}
+.caro{margin:0 -16px 20px}
+.caro-h{display:flex;align-items:baseline;justify-content:space-between;padding:0 16px;margin-bottom:10px}
+.caro-t{font-size:19px;font-weight:800;letter-spacing:-.3px}
+.caro-row{display:flex;gap:12px;overflow-x:auto;padding:0 16px 6px;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.caro-row::-webkit-scrollbar{display:none}
+.card-t{width:140px;flex:none}
+.card-t:active{transform:scale(.96)}
+.card-art{width:140px;height:140px;border-radius:16px;object-fit:cover;background:#1d1d2b;box-shadow:0 8px 22px rgba(0,0,0,.4)}
+.card-n{font-size:13px;font-weight:600;margin-top:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.card-a{font-size:11.5px;color:var(--t2);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mixbtn{display:flex;align-items:center;gap:10px;width:100%;padding:14px;border-radius:16px;border:none;
+  background:var(--grad);color:#fff;font-size:15px;font-weight:800;margin-bottom:16px}
+.mixbtn:active{transform:scale(.98)}
+.libfilter{display:flex;align-items:center;gap:8px;background:#15151f;border:1px solid var(--line);border-radius:12px;
+  padding:0 12px;height:40px;margin-bottom:12px}
+html.amoled .libfilter{background:#101014}
+.libfilter input{flex:1;min-width:0;background:none;border:none;outline:none;color:#f5f5f7;font-size:15px}
+.qrow-drag{opacity:.9;transform:scale(1.03);background:#1d1d2e!important;box-shadow:0 10px 30px rgba(0,0,0,.5);z-index:5;position:relative}
+.share-img{width:100%;border-radius:18px;display:block}
+.share-ph{width:100%;aspect-ratio:4/5;border-radius:14px;background:#1a1a28}
 .page{position:fixed;inset:0;z-index:80;background:var(--bg);transform:translateX(103%);
   transition:transform .38s cubic-bezier(.32,.72,.25,1);visibility:hidden;display:flex;flex-direction:column}
 .page.open{transform:none;visibility:visible}
@@ -303,6 +323,7 @@ html.amoled .btn{background:#16161c}
           <div class="hero-s">Музыка SoundCloud — красиво и без лишнего</div>
         </div>
         <div class="chips scrollx" id="genres"></div>
+        <div id="caros"></div>
         <div id="chart-list" class="list"></div>
         <div id="chart-sent" class="sentinel"></div>
       </div>
@@ -316,6 +337,14 @@ html.amoled .btn{background:#16161c}
           <button data-v="playlists">Плейлисты</button>
           <button data-v="history">История</button>
         </div>
+        <button class="mixbtn" id="mix-btn">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 11a7 7 0 0 1-7 7v0a7 7 0 0 1-7-7v0a7 7 0 0 1 7-7h1"/><path d="m13 4 3 3-3 3"/><circle cx="13" cy="11" r="0"/></svg>
+          Мой микс — радио из любимых
+        </button>
+        <div class="libfilter" id="lib-filter" hidden>
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#8e8ea3" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7.5"/><path d="m20.5 20.5-4.3-4.3"/></svg>
+          <input id="lib-q" type="search" placeholder="Искать в списке…" autocomplete="off">
+        </div>
         <div id="lib-list" class="list"></div>
       </div>
     </section>
@@ -328,6 +357,15 @@ html.amoled .btn{background:#16161c}
           <div class="chips" id="accents" style="margin:12px 0 4px"></div>
           <label class="row" style="cursor:pointer;margin-top:8px">AMOLED-чёрный
             <span class="switch"><input type="checkbox" id="opt-amoled"><i></i></span>
+          </label>
+          <div class="row" style="justify-content:flex-start;margin-top:14px"><b>Иконка приложения</b></div>
+          <div class="chips" id="iconset" style="margin:10px 0 2px"></div>
+          <p class="note" id="icon-note" hidden>Иконка доступна только в приложении.</p>
+        </div>
+        <div class="card">
+          <div class="row" style="justify-content:flex-start"><b>Экран</b></div>
+          <label class="row" style="cursor:pointer;margin-top:6px">Не гасить экран при плеере
+            <span class="switch"><input type="checkbox" id="opt-wake"><i></i></span>
           </label>
         </div>
         <div class="card">
@@ -809,6 +847,15 @@ window.__swRemote = function(cmd, arg){
   else if (cmd === 'prev') prev();
   else if (cmd === 'seek' && isFinite(arg) && arg >= 0){ audio.currentTime = arg; nativeNP(); }
 };
+function haptic(kind){
+  if (!window.__swNative || !window.webkit) return;
+  try { webkit.messageHandlers.sw.postMessage({cmd:'haptic', kind: kind || 0}); } catch {}
+}
+function nativeCmd(obj){
+  if (!window.__swNative || !window.webkit) return false;
+  try { webkit.messageHandlers.sw.postMessage(obj); return true; } catch { return false; }
+}
+window.__swSavedPhoto = function(ok){ toast(ok ? 'Карточка сохранена в Фото' : 'Не удалось сохранить'); };
 
 function saveSession(){
   const t = current(); if (!t || !P.q.length){ LS.set('session', null); return; }
@@ -856,7 +903,7 @@ function findTrack(id){
 function toggleLike(id){
   const t = findTrack(id);
   if (isLiked(id)){ state.likes = state.likes.filter(x => x.id !== id); }
-  else if (t){ const { media, ...m } = t; state.likes.unshift(m); }
+  else if (t){ const { media, ...m } = t; state.likes.unshift(m); haptic(1); }
   else return;
   LS.set('likes', state.likes);
   syncHearts(id);
@@ -891,6 +938,35 @@ function trackRow(t, i, rank){
     </div>
   </div>`;
 }
+const CARO_ROWS = [['Свежая музыка', 'new music 2026'], ['Хип-хоп', 'hip hop'], ['Электроника', 'electronic'], ['Phonk', 'phonk']];
+async function loadCaros(){
+  const box = $('#caros');
+  box.innerHTML = CARO_ROWS.map((r, i) => `<div class="caro" data-caro="${i}">
+    <div class="caro-h"><div class="caro-t">${esc(r[0])}</div></div>
+    <div class="caro-row">${'<div class="card-t"><div class="card-art sk"></div><div class="sk" style="height:12px;margin-top:8px"></div></div>'.repeat(4)}</div>
+  </div>`).join('');
+  for (let i = 0; i < CARO_ROWS.length; i++){
+    try {
+      const list = await searchTracks(CARO_ROWS[i][1], 0);
+      const row = box.querySelector(`[data-caro="${i}"] .caro-row`);
+      row._list = list;
+      row.innerHTML = list.slice(0, 12).map((t, j) => `<div class="card-t" data-ci="${j}">
+        <img class="card-art" loading="lazy" src="${esc(t.art) || PLACEHOLDER}" onerror="this.onerror=null;this.src=PLACEHOLDER">
+        <div class="card-n">${esc(t.title)}</div>
+        <div class="card-a">${esc(t.artist)}</div>
+      </div>`).join('');
+      updatePlayingRows();
+    } catch {}
+  }
+}
+$('#caros').addEventListener('click', e => {
+  const c = e.target.closest('[data-ci]'); if (!c) return;
+  const row = c.closest('.caro-row'); const list = row._list || [];
+  const i = +c.dataset.ci;
+  haptic(0);
+  if (list[i]) playList(list, i, CARO_ROWS[+row.closest('[data-caro]').dataset.caro][0]);
+});
+
 function renderList(cont, list, opts = {}){
   const base = opts.append ? (cont._list || []).length : 0;
   const html = list.map((t, i) => trackRow(t, i + base, opts.rank ? base + i + 1 : 0)).join('');
@@ -1066,11 +1142,37 @@ dscroll.addEventListener('touchend', () => {
 });
 
 let libMode = 'likes';
+let libFilterQ = '';
 $('#lib-seg').addEventListener('click', e => {
   const b = e.target.closest('button'); if (!b) return;
   libMode = b.dataset.v;
   $$('#lib-seg button').forEach(x => x.classList.toggle('on', x === b));
+  $('#lib-filter').hidden = libMode === 'playlists';
   renderLib();
+});
+$('#lib-q').addEventListener('input', debounce(e => { libFilterQ = e.target.value.trim().toLowerCase(); renderLib(); }, 200));
+const libFiltered = list => !libFilterQ ? list : list.filter(t =>
+  (t.title || '').toLowerCase().includes(libFilterQ) || (t.artist || '').toLowerCase().includes(libFilterQ));
+$('#mix-btn').addEventListener('click', async () => {
+  if (state.likes.length < 3){ toast('Добавьте минимум 3 любимых трека'); return; }
+  toast('Собираю микс…');
+  try {
+    const seeds = state.likes.slice(0, 3);
+    const seen = new Set();
+    let mix = [];
+    for (const s of seeds){
+      const rel = await getRelated(s.id);
+      rel.forEach(t => { if (!seen.has(t.id)){ seen.add(t.id); mix.push(t); } });
+    }
+    const tail = state.likes.slice(3).filter(t => !seen.has(t.id)).map(t => ({ ...t }));
+    mix = mix.sort(() => Math.random() - 0.5);
+    const head = state.likes[0];
+    mix.unshift(head);
+    tail.forEach(t => mix.push(t));
+    if (mix.length < 3) { toast('Не удалось собрать микс'); return; }
+    haptic(1);
+    playList(mix, 0, 'Мой микс');
+  } catch { toast('Не удалось собрать микс'); }
 });
 function renderLib(){
   const c = $('#lib-list');
@@ -1087,9 +1189,10 @@ function renderLib(){
     c._list = [];
     return;
   }
-  const list = (libMode === 'likes' ? state.likes : state.history).slice();
+  const list = libFiltered((libMode === 'likes' ? state.likes : state.history).slice());
   renderList(c, list);
-  if (!list.length){
+  if (!list.length && libFilterQ) c.innerHTML = emptyState('Ничего', 'По запросу «' + libFilterQ + '» в списке нет совпадений');
+  if (!list.length && !libFilterQ){
     c.innerHTML = emptyState(
       libMode === 'likes' ? 'Пока пусто' : 'История пуста',
       libMode === 'likes' ? 'Нажимайте на сердечко у треков — они появятся здесь' : 'Здесь появятся треки, которые вы слушали');
@@ -1133,6 +1236,7 @@ function addToPlaylistSheet(track){
 }
 
 let curScreen = 'discover';
+const TABS = ['search', 'discover', 'library', 'settings'];
 function showScreen(s){
   curScreen = s;
   $$('.screen').forEach(el => el.classList.toggle('active', el.id === 'scr-' + s));
@@ -1140,7 +1244,20 @@ function showScreen(s){
   if (s === 'discover' && !discoverState.loaded){ discoverState.loaded = true; loadDiscover(true); }
   if (s === 'library') renderLib();
 }
-$$('.tab').forEach(b => b.addEventListener('click', () => showScreen(b.dataset.s)));
+$$('.tab').forEach(b => b.addEventListener('click', () => { haptic(0); showScreen(b.dataset.s); }));
+(() => {
+  let sx = 0, sy = 0;
+  $('#screens').addEventListener('touchstart', e => { sx = e.touches[0].clientX; sy = e.touches[0].clientY; }, { passive: true });
+  $('#screens').addEventListener('touchend', e => {
+    const dx = e.changedTouches[0].clientX - sx, dy = e.changedTouches[0].clientY - sy;
+    if (Math.abs(dx) < 64 || Math.abs(dx) < Math.abs(dy) * 1.4) return;
+    if (e.target.closest('.caro-row, input, #seek')) return;
+    const i = TABS.indexOf(curScreen);
+    if (i < 0) return;
+    const ni = Math.max(0, Math.min(TABS.length - 1, i + (dx < 0 ? 1 : -1)));
+    if (ni !== i){ haptic(0); showScreen(TABS[ni]); }
+  }, { passive: true });
+})();
 
 function showMini(t){
   const m = $('#mini'); m.hidden = false;
@@ -1169,7 +1286,7 @@ function setNP(t){
   resetLyrics();
   nativeNP();
 }
-const openNP  = () => $('#np').classList.add('open');
+const openNP  = () => { haptic(0); $('#np').classList.add('open'); };
 const closeNP = () => $('#np').classList.remove('open');
 $('#np-close').addEventListener('click', closeNP);
 $('#np-play').addEventListener('click', toggle);
@@ -1177,11 +1294,6 @@ $('#np-next').addEventListener('click', () => next());
 $('#np-prev').addEventListener('click', prev);
 $('#np-like').addEventListener('click', () => { const t = current(); if (t) toggleLike(t.id); });
 $('#np-artist').addEventListener('click', () => { const t = current(); if (t && t.uid) openArtist(t.uid); });
-$('#np-share').addEventListener('click', () => {
-  const t = current(); if (!t) return;
-  if (navigator.share) navigator.share({ title: t.title + ' — ' + t.artist, url: t.link || 'https://soundcloud.com' }).catch(() => {});
-  else if (navigator.clipboard && t.link){ navigator.clipboard.writeText(t.link); toast('Ссылка скопирована'); }
-});
 $('#np-addpl').addEventListener('click', () => { const t = current(); if (t) addToPlaylistSheet(t); });
 $('#np-shuffle').addEventListener('click', () => {
   state.shuffle = !state.shuffle; LS.set('shuffle', state.shuffle);
@@ -1280,6 +1392,133 @@ $('#qs-list').addEventListener('click', e => {
   const r = e.target.closest('[data-q]'); if (!r || $('#qs-title').textContent !== 'Очередь') return;
   P.i = +r.dataset.q; renderQueue(); loadTrack(true);
 });
+(() => {
+  let dragRow = null, holdT = null, startY = 0;
+  const list = $('#qs-list');
+  list.addEventListener('touchstart', e => {
+    const row = e.target.closest('.row-t[data-q]');
+    if (!row || $('#qs-title').textContent !== 'Очередь') return;
+    startY = e.touches[0].clientY;
+    holdT = setTimeout(() => {
+      holdT = null;
+      dragRow = row;
+      row.classList.add('qrow-drag');
+      haptic(1);
+    }, 420);
+  }, { passive: true });
+  list.addEventListener('touchmove', e => {
+    if (holdT && Math.abs(e.touches[0].clientY - startY) > 12){ clearTimeout(holdT); holdT = null; }
+    if (!dragRow) return;
+    e.preventDefault();
+    const y = e.touches[0].clientY;
+    dragRow.style.transform = `translateY(${y - startY}px)`;
+    const over = document.elementFromPoint(e.touches[0].clientX, y);
+    const target = over && over.closest('.row-t[data-q]');
+    if (target && target !== dragRow){
+      const rows = [...list.children];
+      const from = rows.indexOf(dragRow), to = rows.indexOf(target);
+      startY = y; dragRow.style.transform = '';
+      if (from < to) target.after(dragRow); else target.before(dragRow);
+      dragRow.style.transform = `translateY(0px)`;
+    }
+  }, { passive: false });
+  list.addEventListener('touchend', () => {
+    if (holdT){ clearTimeout(holdT); holdT = null; }
+    if (!dragRow) return;
+    const from = +dragRow.dataset.q;
+    const rows = [...list.children];
+    const to = rows.indexOf(dragRow);
+    dragRow.classList.remove('qrow-drag');
+    dragRow.style.transform = '';
+    dragRow = null;
+    if (to < 0 || from === to) return;
+    const item = P.q.splice(from, 1)[0];
+    P.q.splice(to, 0, item);
+    if (P.i === from) P.i = to;
+    else if (from < P.i && to >= P.i) P.i--;
+    else if (from > P.i && to <= P.i) P.i++;
+    renderQueue();
+    haptic(0);
+  });
+})();
+
+(() => {
+  const btn = $('#np-play');
+  let holdT = null, boosted = false, origRate = 1;
+  const boost = on => {
+    if (on === boosted) return;
+    boosted = on;
+    if (on){ origRate = audio.playbackRate || 1; audio.playbackRate = 2; toast('⏩ 2× — отпустите для обычной скорости'); haptic(0); }
+    else { audio.playbackRate = origRate; }
+  };
+  btn.addEventListener('touchstart', () => { holdT = setTimeout(() => boost(true), 550); }, { passive: true });
+  const off = () => { clearTimeout(holdT); boost(false); };
+  btn.addEventListener('touchend', off);
+  btn.addEventListener('touchcancel', off);
+})();
+
+async function shareCard(){
+  const t = current(); if (!t) return;
+  const W = 1080, H = 1350;
+  const cv = document.createElement('canvas');
+  cv.width = W; cv.height = H;
+  const x = cv.getContext('2d');
+  const acc = ACCENTS[state.accent] || ACCENTS.orange;
+  x.fillStyle = state.amoled ? '#000' : '#08080d';
+  x.fillRect(0, 0, W, H);
+  const img = new Image();
+  img.crossOrigin = 'anonymous';
+  try { img.src = t.art || PLACEHOLDER; await new Promise(r => { img.onload = r; img.onerror = r; setTimeout(r, 2500); }); } catch {}
+  try {
+    x.filter = 'blur(60px) saturate(1.6) brightness(0.5)';
+    const s = Math.max(W / img.width, H / img.height) * 1.4;
+    x.drawImage(img, (W - img.width * s) / 2, (H - img.height * s) / 2, img.width * s, img.height * s);
+    x.filter = 'none';
+  } catch {}
+  x.fillStyle = 'rgba(8,8,13,0.55)';
+  x.fillRect(0, 0, W, H);
+  const g = x.createLinearGradient(0, 0, W, H);
+  g.addColorStop(0, acc[0]); g.addColorStop(1, acc[1]);
+  x.fillStyle = g;
+  x.font = '900 92px -apple-system, sans-serif';
+  x.fillText('SoundWave', 70, 160);
+  try {
+    x.save();
+    x.shadowColor = 'rgba(0,0,0,.6)'; x.shadowBlur = 60;
+    const A = 640, dx = (W - A) / 2, dy = 300;
+    x.beginPath();
+    const r = 56;
+    x.moveTo(dx + r, dy); x.arcTo(dx + A, dy, dx + A, dy + A, r); x.arcTo(dx + A, dy + A, dx, dy + A, r);
+    x.arcTo(dx, dy + A, dx, dy, r); x.arcTo(dx, dy, dx + A, dy, r); x.closePath();
+    x.clip();
+    x.fillStyle = '#1d1d2b'; x.fillRect(dx, dy, A, A);
+    x.drawImage(img, dx, dy, A, A);
+    x.restore();
+  } catch {}
+  x.fillStyle = '#f5f5f7';
+  x.font = '800 54px -apple-system, sans-serif';
+  const lines = String(t.title).match(/.{1,26}(\s|$)/g) || [String(t.title)];
+  lines.slice(0, 2).forEach((l, i) => x.fillText(l.trim(), 70, 1120 + i * 66));
+  x.fillStyle = '#8e8ea3';
+  x.font = '600 40px -apple-system, sans-serif';
+  x.fillText(String(t.artist).slice(0, 34), 70, 1120 + Math.min(2, lines.length) * 66 + 26);
+  const data = cv.toDataURL('image/png');
+  const isNative = !!window.__swNative;
+  openSheet('Карточка трека',
+    `<img class="share-img" src="${data}">
+     <div class="btnrow">
+       ${isNative ? '<button class="btn" id="sh-save">Сохранить в Фото</button>' : ''}
+       <button class="btn" id="sh-copy">Скопировать название</button>
+     </div>
+     ${navigator.share && t.link ? '<button class="btn" id="sh-link" style="margin-top:8px;width:100%">Поделиться ссылкой</button>' : ''}
+     <p class="note">${isNative ? '' : 'В браузере: удерживайте картинку, чтобы сохранить. '}${t.link || ''}</p>`);
+  const sl = $('#sh-link');
+  if (sl) sl.onclick = () => navigator.share({ title: t.title + ' — ' + t.artist, url: t.link }).catch(()=>{});
+  const sv = $('#sh-save');
+  if (sv) sv.onclick = () => nativeCmd({cmd:'saveimage', b64: data.split(',')[1]}) || toast('Недоступно');
+  $('#sh-copy').onclick = () => { navigator.clipboard && navigator.clipboard.writeText(t.title + ' — ' + t.artist); closeSheet(); toast('Скопировано'); };
+}
+$('#np-share').addEventListener('click', shareCard);
 $('#np-queue').addEventListener('click', () => openSheet('Очередь'));
 $('#qs-bd').addEventListener('click', closeSheet);
 function openSheet(title, html){
@@ -1702,8 +1941,26 @@ $('#accents').addEventListener('click', e => {
     c.style.background = k === state.accent ? '' : `linear-gradient(135deg,${v[0]},${v[1]})`;
     c.style.borderColor = k === state.accent ? '' : 'transparent';
   });
+  haptic(0);
   toast('Акцент обновлён');
 });
+const ICON_SETS = [['Оранж', ''], ['Синий', 'alt-blue'], ['Розовый', 'alt-pink'], ['Зелёный', 'alt-green']];
+$('#iconset').innerHTML = ICON_SETS.map(([n, id], i) =>
+  `<button class="chip${i === 0 ? ' on' : ''}" data-ic="${id}">${n}</button>`).join('');
+$('#iconset').addEventListener('click', e => {
+  const b = e.target.closest('[data-ic]'); if (!b) return;
+  $$('#iconset .chip').forEach(c => c.classList.toggle('on', c === b));
+  const name = b.dataset.ic;
+  if (!window.__swNative){ $('#icon-note').hidden = false; return; }
+  if (!nativeCmd({cmd:'seticon', name})) toast('Иконка недоступна');
+});
+$('#opt-wake').checked = LS.get('wake', false);
+$('#opt-wake').addEventListener('change', e => {
+  LS.set('wake', e.target.checked);
+  nativeCmd({cmd:'keepawake', on: e.target.checked});
+  toast(e.target.checked ? 'Экран будет гореть при открытом плеере' : 'Экран гаснет как обычно');
+});
+if (LS.get('wake', false)) nativeCmd({cmd:'keepawake', on:true});
 $('#opt-amoled').checked = state.amoled;
 $('#opt-amoled').addEventListener('change', e => { state.amoled = e.target.checked; LS.set('amoled', state.amoled); applyTheme(); });
 $('#opt-auto').checked = state.autoRelated;
@@ -1769,6 +2026,7 @@ window.addEventListener('pagehide', saveSession);
   if (restored) toast('Вернул прошлую сессию — нажмите ▶');
   discoverState.loaded = true;
   loadDiscover(true);
+  loadCaros();
   apiGet('/search/tracks', { q: 'test', limit: 1 })
     .then(() => { cidState = 'ok'; updateCidUI(); })
     .catch(() => { cidState = 'err'; updateCidUI(); });

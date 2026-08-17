@@ -2,6 +2,7 @@
 #import <WebKit/WebKit.h>
 #import <AVFAudio/AVFAudio.h>
 #import <MediaPlayer/MediaPlayer.h>
+#import <Photos/Photos.h>
 
 static NSString *const SW_UA =
   @"Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15"
@@ -55,11 +56,51 @@ static NSString *const SW_BRIDGE_JS =
     }
 }
 
++ (void)doCommand:(NSDictionary *)d withWebView:(WKWebView *)wv {
+    NSString *cmd = d[@"cmd"];
+    if ([cmd isEqualToString:@"haptic"]) {
+        int kind = [d[@"kind"] intValue];
+        UIImpactFeedbackStyle style = kind == 1 ? UIImpactFeedbackStyleMedium : UIImpactFeedbackStyleLight;
+        UIImpactFeedbackGenerator *gen = [[UIImpactFeedbackGenerator alloc] initWithStyle:style];
+        [gen impactOccurred];
+    } else if ([cmd isEqualToString:@"keepawake"]) {
+        [UIApplication sharedApplication].idleTimerDisabled = [d[@"on"] boolValue];
+    } else if ([cmd isEqualToString:@"seticon"]) {
+        NSString *name = [d[@"name"] stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
+        if (name.length == 0) name = nil;
+        [[UIApplication sharedApplication] setAlternateIconName:name completionHandler:^(NSError *e){
+            dispatch_async(dispatch_get_main_queue(), ^{
+                [wv evaluateJavaScript:[NSString stringWithFormat:@"window.toast&&toast(%@)",
+                  e ? @"'Иконка недоступна'" : @"'Иконка обновлена'"] completionHandler:nil];
+            });
+        }];
+    } else if ([cmd isEqualToString:@"saveimage"]) {
+        NSString *b64 = d[@"b64"];
+        if (!b64.length) return;
+        NSData *data = [[NSData alloc] initWithBase64EncodedString:b64 options:0];
+        UIImage *img = [UIImage imageWithData:data];
+        if (!img) {
+            [wv evaluateJavaScript:@"window.__swSavedPhoto&&window.__swSavedPhoto(false)" completionHandler:nil];
+            return;
+        }
+        [[PHPhotoLibrary sharedPhotoLibrary] performChanges:^{
+            PHAssetChangeRequest *req = [PHAssetChangeRequest creationRequestForAssetFromImage:img];
+            (void)req;
+        } completionHandler:^(BOOL ok, NSError *e){
+            dispatch_async(dispatch_get_main_queue(), ^{
+                [wv evaluateJavaScript:[NSString stringWithFormat:@"window.__swSavedPhoto&&window.__swSavedPhoto(%@)", ok ? @"true" : @"false"] completionHandler:nil];
+            });
+        }];
+    }
+}
+
 - (void)userContentController:(WKUserContentController *)uc
        didReceiveScriptMessage:(WKScriptMessage *)m {
     if ([m.body isKindOfClass:[NSDictionary class]] && m.body[@"cmd"]) {
         if ([m.body[@"cmd"] isEqualToString:@"nowplaying"]) {
             [SWBridge updateNowPlaying:m.body];
+        } else {
+            [SWBridge doCommand:m.body withWebView:self.webView];
         }
         return;
     }

@@ -17,14 +17,54 @@
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>3.2</string>
+	<string>3.3</string>
 	<key>CFBundleVersion</key>
-	<string>14</string>
+	<string>15</string>
 	<key>CFBundleIconFiles</key>
 	<array>
 		<string>AppIcon60x60@2x</string>
 		<string>AppIcon60x60@3x</string>
 	</array>
+	<key>CFBundleIcons</key>
+	<dict>
+		<key>CFBundlePrimaryIcon</key>
+		<dict>
+			<key>CFBundleIconFiles</key>
+			<array>
+				<string>AppIcon60x60@2x</string>
+				<string>AppIcon60x60@3x</string>
+			</array>
+		</dict>
+		<key>CFBundleAlternateIcons</key>
+		<dict>
+			<key>alt-blue</key>
+			<dict>
+				<key>CFBundleIconFiles</key>
+				<array>
+					<string>alt-blue-120</string>
+					<string>alt-blue-180</string>
+				</array>
+			</dict>
+			<key>alt-pink</key>
+			<dict>
+				<key>CFBundleIconFiles</key>
+				<array>
+					<string>alt-pink-120</string>
+					<string>alt-pink-180</string>
+				</array>
+			</dict>
+			<key>alt-green</key>
+			<dict>
+				<key>CFBundleIconFiles</key>
+				<array>
+					<string>alt-green-120</string>
+					<string>alt-green-180</string>
+				</array>
+			</dict>
+		</dict>
+	</dict>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Сохранение карточек треков в Фото</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>MinimumOSVersion</key>
