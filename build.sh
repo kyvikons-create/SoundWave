@@ -7,7 +7,7 @@ xcrun --sdk iphoneos clang \
   -mios-version-min=15.0 \
   -fobjc-arc \
   -framework UIKit -framework Foundation -framework CoreFoundation \
-  -framework WebKit -framework AVFAudio -framework MediaPlayer \
+  -framework WebKit -framework AVFAudio -framework MediaPlayer -framework Photos \
   app.m -o SoundWave
 
 echo "== ad-hoc codesign =="
