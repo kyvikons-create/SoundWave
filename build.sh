@@ -15,7 +15,7 @@ xcrun --sdk iphoneos clang \
   -mios-version-min=15.0 \
   -fobjc-arc \
   -framework UIKit -framework Foundation -framework CoreFoundation \
-  -framework WebKit -framework AVFAudio -framework MediaPlayer -framework Photos \
+  -framework WebKit -framework AVFAudio -framework AVFoundation -framework MediaPlayer -framework Photos \
   $LINK_EXTRA \
   app.m -o SoundWave
 

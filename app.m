@@ -3,6 +3,7 @@
 #import <AVFAudio/AVFAudio.h>
 #import <MediaPlayer/MediaPlayer.h>
 #import <Photos/Photos.h>
+#import <AVFoundation/AVFoundation.h>
 
 static NSString *const SW_UA =
   @"Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15"
@@ -23,7 +24,72 @@ static NSString *const SW_BRIDGE_JS =
 @property (weak, nonatomic) WKWebView *webView;
 @end
 
+static AVPlayer *swPlayer = nil;
+static id swTimeObserver = nil;
+static __unsafe_unretained WKWebView *gPlayerWV = nil;
+
+static void swEval(NSString *js) {
+    if (!gPlayerWV) return;
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [gPlayerWV evaluateJavaScript:js completionHandler:nil];
+    });
+}
+
 @implementation SWBridge
+
++ (void)initPlayerOnce {
+    static BOOL done = NO;
+    if (done) return;
+    done = YES;
+    swPlayer = [[AVPlayer alloc] init];
+    swTimeObserver = [swPlayer addPeriodicTimeObserverForInterval:CMTimeMakeWithSeconds(0.5, 600)
+        queue:dispatch_get_main_queue() usingBlock:^(CMTime t) {
+        if (!gPlayerWV) return;
+        double pos = CMTimeGetSeconds(t);
+        double dur = 0;
+        AVPlayerItem *item = swPlayer.currentItem;
+        if (item && CMTIME_IS_NUMERIC(item.duration) && item.duration.value > 0) dur = CMTimeGetSeconds(item.duration);
+        NSString *js = [NSString stringWithFormat:@"window.__swAudioTime&&window.__swAudioTime(%f,%f)", pos, dur];
+        [gPlayerWV evaluateJavaScript:js completionHandler:nil];
+    }];
+    [[NSNotificationCenter defaultCenter] addObserverForName:AVPlayerItemDidPlayToEndTimeNotification
+        object:nil queue:[NSOperationQueue mainQueue] usingBlock:^(NSNotification *n) {
+        if (n.object != swPlayer.currentItem) return;
+        swEval(@"window.__swAudioEvent&&window.__swAudioEvent('ended')");
+    }];
+    [[NSNotificationCenter defaultCenter] addObserverForName:AVPlayerItemFailedToPlayToEndTimeNotification
+        object:nil queue:[NSOperationQueue mainQueue] usingBlock:^(NSNotification *n) {
+        if (n.object != swPlayer.currentItem) return;
+        swEval(@"window.__swAudioEvent&&window.__swAudioEvent('error')");
+    }];
+}
+
++ (void)audioCommand:(NSDictionary *)d {
+    [SWBridge initPlayerOnce];
+    NSString *op = d[@"op"];
+    if ([op isEqualToString:@"load"]) {
+        NSString *u = d[@"u"];
+        NSURL *url = u ? [NSURL URLWithString:u] : nil;
+        if (!url) return;
+        AVPlayerItem *item = [AVPlayerItem playerItemWithURL:url];
+        [swPlayer replaceCurrentItemWithPlayerItem:item];
+    } else if ([op isEqualToString:@"play"]) {
+        [swPlayer play];
+        swEval(@"window.__swAudioEvent&&window.__swAudioEvent('play')");
+    } else if ([op isEqualToString:@"pause"]) {
+        [swPlayer pause];
+        swEval(@"window.__swAudioEvent&&window.__swAudioEvent('pause')");
+    } else if ([op isEqualToString:@"seek"]) {
+        double v = [d[@"v"] doubleValue];
+        [swPlayer seekToTime:CMTimeMakeWithSeconds(v, 600) toleranceBefore:kCMTimeZero toleranceAfter:kCMTimeZero];
+    } else if ([op isEqualToString:@"rate"]) {
+        double r = [d[@"v"] doubleValue];
+        swPlayer.rate = r > 0 ? r : 1.0;
+    } else if ([op isEqualToString:@"vol"]) {
+        swPlayer.volume = [d[@"v"] floatValue];
+    }
+}
+
 
 + (void)updateNowPlaying:(NSDictionary *)d {
     NSMutableDictionary *info = [NSMutableDictionary dictionary];
@@ -110,6 +176,9 @@ static NSString *const SW_BRIDGE_JS =
     if ([m.body isKindOfClass:[NSDictionary class]] && m.body[@"cmd"]) {
         if ([m.body[@"cmd"] isEqualToString:@"nowplaying"]) {
             [SWBridge updateNowPlaying:m.body];
+        } else if ([m.body[@"cmd"] isEqualToString:@"audio"]) {
+            gPlayerWV = self.webView;
+            [SWBridge audioCommand:m.body];
         } else {
             [SWBridge doCommand:m.body withWebView:self.webView];
         }

@@ -727,8 +727,43 @@ async function getStreamUrl(t){
   return j.url;
 }
 
-const audio = new Audio();
-audio.preload = 'auto';
+let _naRate = 1, _naVol = 1, _naSrc = '', _naCur = 0, _naDur = 0, _naPaused = true, _naLoading = false;
+const audioEv = {};
+function fireEv(n){ (audioEv[n] || []).forEach(f => { try { f(); } catch {} }); }
+window.__swAudioTime = function(p, d){
+  const wasNoDur = !_naDur;
+  _naCur = p; if (d > 0) _naDur = d;
+  fireEv('timeupdate');
+  if (wasNoDur && _naDur > 0){ fireEv('loadedmetadata'); fireEv('canplay'); _naLoading = false; }
+};
+window.__swAudioEvent = function(e, d){
+  if (d > 0) _naDur = d;
+  if (e === 'play') _naPaused = false;
+  if (e === 'pause') _naPaused = true;
+  if (e === 'waiting') _naLoading = true;
+  fireEv(e);
+};
+const audio = window.__swNative ? {
+  get paused(){ return _naPaused; },
+  get currentTime(){ return _naCur; },
+  set currentTime(v){ _naCur = v; nativeCmd({cmd:'audio', op:'seek', v: v}); },
+  get duration(){ return _naDur; },
+  get playbackRate(){ return _naRate; },
+  set playbackRate(r){ _naRate = r; nativeCmd({cmd:'audio', op:'rate', v: r}); },
+  get volume(){ return _naVol; },
+  set volume(v){ _naVol = v; nativeCmd({cmd:'audio', op:'vol', v: v}); },
+  get src(){ return _naSrc; },
+  set src(u){ _naSrc = u; _naCur = 0; _naDur = 0; _naPaused = true; _naLoading = true;
+              fireEv('waiting'); nativeCmd({cmd:'audio', op:'load', u: u}); },
+  set crossOrigin(v){},
+  preload: 'auto', readyState: 4,
+  play(){ nativeCmd({cmd:'audio', op:'play'}); return Promise.resolve(); },
+  pause(){ nativeCmd({cmd:'audio', op:'pause'}); },
+  load(){},
+  addEventListener(n, f){ (audioEv[n] = audioEv[n] || []).push(f); },
+  removeEventListener(n, f){ audioEv[n] = (audioEv[n] || []).filter(x => x !== f); }
+} : new Audio();
+if (!window.__swNative) audio.preload = 'auto';
 const P = { q: [], i: -1, playing: false, loadId: 0, mediaUrl: '', viaProxy: false, restored: false };
 let nowSource = 'Обзор';
 
@@ -830,7 +865,7 @@ audio.addEventListener('error', () => {
     toast('Визуализатор отключён для этого потока');
     return;
   }
-  if (!P.viaProxy && localProxy && P.mediaUrl){
+  if (!P.viaProxy && localProxy && P.mediaUrl && !window.__swNative){
     P.viaProxy = true;
     audio.src = '/sc?url=' + encodeURIComponent(P.mediaUrl);
     audio.play().catch(() => {});
