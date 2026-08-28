@@ -35,6 +35,28 @@ static void swEval(NSString *js) {
     });
 }
 
+static BOOL sw_isAllowedHost(NSString *host) {
+    if (!host || host.length == 0) return NO;
+    NSString *h = [host lowercaseString];
+    BOOL (^ok)(NSString *) = ^BOOL(NSString *suffix) {
+        return [h isEqualToString:suffix] ||
+               [h hasSuffix:[@"." stringByAppendingString:suffix]];
+    };
+    return ok(@"soundcloud.com") || ok(@"sndcdn.com");
+}
+
+static void swRecvReply(WKWebView *wv, NSDictionary *out) {
+    if (!wv) return;
+    NSData *jd = [NSJSONSerialization dataWithJSONObject:out options:0 error:nil];
+    if (!jd) return;
+    NSString *json = [[NSString alloc] initWithData:jd encoding:NSUTF8StringEncoding];
+    NSString *js = [@"window.__swRecv(" stringByAppendingString:json];
+    js = [js stringByAppendingString:@");"];
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [wv evaluateJavaScript:js completionHandler:nil];
+    });
+}
+
 @implementation SWBridge
 
 + (void)initPlayerOnce {
@@ -189,10 +211,16 @@ static void swEval(NSString *js) {
     NSURL *url = u ? [NSURL URLWithString:u] : nil;
     if (!url || !mid.length) return;
 
+    WKWebView *wv = self.webView;
+    NSString *scheme = url.scheme ? [url.scheme lowercaseString] : @"";
+    if (![scheme isEqualToString:@"https"] || !sw_isAllowedHost(url.host)) {
+        swRecvReply(wv, @{ @"i": mid, @"err": @"host" });
+        return;
+    }
+
     NSMutableURLRequest *req = [NSMutableURLRequest requestWithURL:url];
     [req setValue:SW_UA forHTTPHeaderField:@"User-Agent"];
 
-    WKWebView *wv = self.webView;
     NSURLSessionDataTask *task =
       [[NSURLSession sharedSession] dataTaskWithRequest:req
       completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
@@ -207,15 +235,7 @@ static void swEval(NSString *js) {
                 if (text) out[@"text"] = text;
             }
         }
-        NSData *jd = [NSJSONSerialization dataWithJSONObject:out options:0 error:nil];
-        if (!jd) return;
-        NSString *json = [[NSString alloc] initWithData:jd encoding:NSUTF8StringEncoding];
-        NSString *js = [@"window.__swRecv(" stringByAppendingString:json];
-        js = [js stringByAppendingString:@");"];
-        if (!wv) return;
-        dispatch_async(dispatch_get_main_queue(), ^{
-            [wv evaluateJavaScript:js completionHandler:nil];
-        });
+        swRecvReply(wv, out);
     }];
     [task resume];
 }

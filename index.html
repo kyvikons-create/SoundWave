@@ -10,6 +10,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="SoundWave">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' https: blob:; connect-src 'self' https://*.soundcloud.com https://*.sndcdn.com https://lrclib.net https://api.lyrics.ovh https://genius.com; font-src 'self' data:; frame-src 'self'; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icons/icon-180.png">
 <link rel="icon" href="icons/icon-192.png">
@@ -604,8 +605,11 @@ async function probeLocal(){ try { const r = await fetch('/sc?ping=1', { cache: 
 
 function wrapUrl(t, url){
   if (t === 'local') return '/sc?url=' + encodeURIComponent(url);
-  if (t === 'p1') return 'https://corsproxy.io/?url=' + encodeURIComponent(url);
-  if (t === 'p2') return 'https://api.allorigins.win/raw?url=' + encodeURIComponent(url);
+  if (t === 'p1' || t === 'p2'){
+    if (/[?&]client_id=/.test(url) || /(api-v2\.soundcloud\.com|lrclib\.net|api\.lyrics\.ovh|genius\.com)/.test(url)) return url;
+    if (t === 'p1') return 'https://corsproxy.io/?url=' + encodeURIComponent(url);
+    return 'https://api.allorigins.win/raw?url=' + encodeURIComponent(url);
+  }
   return url;
 }
 function shimResp(text, status){
@@ -968,16 +972,16 @@ const emptyState = (title, text, retry) =>
 
 function trackRow(t, i, rank){
   const liked = isLiked(t.id);
-  return `<div class="row-t" data-i="${i}" data-tid="${t.id}">
+  return `<div class="row-t" data-i="${i}" data-tid="${esc(t.id)}">
     <div class="thumb"><img loading="lazy" src="${esc(t.art) || PLACEHOLDER}" onerror="this.onerror=null;this.src=PLACEHOLDER"></div>
     <div class="t-info">
       <div class="t-title">${esc(t.title)}</div>
-      <div class="t-artist"${t.uid ? ` data-uid="${t.uid}"` : ''}>${esc(t.artist)}${t.snip ? ' · фрагмент' : ''}</div>
+      <div class="t-artist"${t.uid ? ` data-uid="${esc(t.uid)}"` : ''}>${esc(t.artist)}${t.snip ? ' · фрагмент' : ''}</div>
     </div>
     <div class="t-side">
       ${rank ? `<span class="rank${rank <= 3 ? ' top' : ''}">${rank}</span>` : ''}
       <span class="t-dur">${fmt(t.dur)}</span>
-      <button class="heart${liked ? ' on' : ''}" data-like="${t.id}" aria-label="Нравится">${liked ? I.heartF : I.heart}</button>
+      <button class="heart${liked ? ' on' : ''}" data-like="${esc(t.id)}" aria-label="Нравится">${liked ? I.heartF : I.heart}</button>
     </div>
   </div>`;
 }
@@ -1074,7 +1078,7 @@ async function runSearch(q, reset){
   searchState.loading = false;
 }
 function renderPlRows(c, pl, append){
-  const html = pl.map(p => `<div class="row-t" data-pl="${p.id}">
+  const html = pl.map(p => `<div class="row-t" data-pl="${esc(p.id)}">
     <div class="thumb" style="width:64px;height:64px"><img loading="lazy" src="${esc(p.art) || PLACEHOLDER}" onerror="this.onerror=null;this.src=PLACEHOLDER"></div>
     <div class="t-info"><div class="t-title">${esc(p.title)}</div><div class="t-artist">Плейлист${p.user ? ' · ' + esc(p.user) : ''}</div></div>
     <span class="t-dur">${p.count} тр.</span>
@@ -1221,7 +1225,7 @@ function renderLib(){
   const c = $('#lib-list');
   if (libMode === 'playlists'){
     const pls = state.playlists;
-    let html = pls.map(p => `<div class="row-t" data-pll="${p.id}">
+    let html = pls.map(p => `<div class="row-t" data-pll="${esc(p.id)}">
       <div class="thumb" style="border-radius:14px;background:var(--grad);display:grid;place-items:center;color:#fff">
         <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
       </div>
@@ -1256,7 +1260,7 @@ function createPlaylist(){
 }
 function addToPlaylistSheet(track){
   openSheet('Добавить в плейлист', state.playlists.map(p =>
-    `<div class="row-t" data-addpl="${p.id}"><div class="t-info"><div class="t-title">${esc(p.name)}</div><div class="t-artist">${p.items.length} тр.</div></div><span class="t-dur">＋</span></div>`).join('') +
+    `<div class="row-t" data-addpl="${esc(p.id)}"><div class="t-info"><div class="t-title">${esc(p.name)}</div><div class="t-artist">${p.items.length} тр.</div></div><span class="t-dur">＋</span></div>`).join('') +
     '<button class="btn" id="sheet-newpl" style="margin-top:10px;width:100%">Новый плейлист</button>');
   $('#qs-list').onclick = e => {
     if (e.target.closest('#sheet-newpl')){
@@ -1438,7 +1442,7 @@ function seekFill(p){ seekEl.style.setProperty('--val', p + '%'); }
 function renderQueue(){
   const c = $('#qs-list');
   if (!P.q.length){ c.innerHTML = '<div class="empty"><b>Очередь пуста</b><p>Выберите трек в поиске или обзоре</p></div>'; return; }
-  c.innerHTML = P.q.map((t, i) => `<div class="row-t${i === P.i ? ' playing' : ''}" data-q="${i}" data-tid="${t.id}">
+  c.innerHTML = P.q.map((t, i) => `<div class="row-t${i === P.i ? ' playing' : ''}" data-q="${i}" data-tid="${esc(t.id)}">
       ${i === P.i ? '<span class="qnum">' + EQ + '</span>' : `<span class="qnum">${i + 1}</span>`}
       <div class="thumb"><img loading="lazy" src="${esc(t.art) || PLACEHOLDER}" onerror="this.onerror=null;this.src=PLACEHOLDER"></div>
       <div class="t-info"><div class="t-title">${esc(t.title)}</div><div class="t-artist">${esc(t.artist)}</div></div>
