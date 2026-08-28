@@ -63,7 +63,7 @@ html.amoled .chip{background:#101014}
 html.amoled .seg{background:#101014}
 .seg button{flex:1;padding:9px;border:none;background:none;color:var(--t2);font-size:14px;font-weight:600;border-radius:9px;transition:.18s}
 .seg button.on{background:#262636;color:#fff}
-.row-t{display:flex;gap:12px;align-items:center;padding:8px 6px;border-radius:14px;transition:background .15s}
+.row-t{display:flex;gap:12px;align-items:center;padding:8px 6px;border-radius:14px;transition:background .15s;content-visibility:auto;contain-intrinsic-size:72px}
 .row-t:active{background:rgba(255,255,255,.06)}
 .thumb{position:relative;width:56px;height:56px;border-radius:11px;overflow:hidden;flex:none;background:#1d1d2b}
 .thumb img{width:100%;height:100%;object-fit:cover;display:block}
@@ -95,7 +95,7 @@ body.paused .eq i{animation-play-state:paused;height:4px}
 .empty b{display:block;color:#f5f5f7;font-size:17px;margin-bottom:6px;font-weight:700}
 .empty p{font-size:13.5px;line-height:1.5;margin-bottom:16px}
 .tabbar{position:absolute;left:0;right:0;bottom:0;display:flex;z-index:40;
-  background:rgba(11,11,19,.85);backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);
+  background:rgba(11,11,19,.94);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
   border-top:1px solid var(--line);padding:7px 8px calc(7px + var(--sb))}
 html.amoled .tabbar{background:rgba(0,0,0,.9)}
 .tab{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:3px;background:none;border:none;color:#71718a;transition:color .2s}
@@ -103,21 +103,21 @@ html.amoled .tabbar{background:rgba(0,0,0,.9)}
 .tab span{font-size:10px;font-weight:600;letter-spacing:.2px}
 .tab svg{width:24px;height:24px}
 .mini{position:absolute;left:10px;right:10px;bottom:calc(60px + var(--sb) + 8px);height:62px;display:flex;align-items:center;gap:10px;
-  background:rgba(25,25,40,.92);backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);
+  background:rgba(25,25,40,.96);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
   border:1px solid rgba(255,255,255,.1);border-radius:16px;padding:0 6px 0 8px;z-index:39;overflow:hidden;
-  box-shadow:0 10px 34px rgba(0,0,0,.55);cursor:pointer}
-.mini-bar{position:absolute;left:0;bottom:0;height:2.5px;background:var(--grad);width:0%;transition:width .25s linear}
+  box-shadow:0 10px 34px rgba(0,0,0,.55);cursor:pointer;will-change:transform}
+.mini-bar{position:absolute;left:0;bottom:0;height:2.5px;background:var(--grad);width:100%;transform:scaleX(0);transform-origin:left;transition:transform .25s linear}
 .mini-art{width:44px;height:44px;border-radius:9px;object-fit:cover;flex:none;background:#222}
 .mini-info{flex:1;min-width:0}
 .mini-t{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .mini-a{font-size:12px;color:var(--t2);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .mini-play,.mini-next{width:44px;height:44px;flex:none;display:grid;place-items:center;background:none;border:none;color:#f5f5f7}
 .mini-play:active,.mini-next:active{transform:scale(.9)}
-.np{position:fixed;inset:0;z-index:100;transform:translateY(103%);visibility:hidden;
+.np{position:fixed;inset:0;z-index:100;transform:translateY(103%);visibility:hidden;will-change:transform;
   transition:transform .45s cubic-bezier(.32,.72,.25,1),visibility .45s}
 .np.open{transform:translateY(0);visibility:visible}
-.np-bg{position:absolute;inset:-70px;width:calc(100% + 140px);height:calc(100% + 140px);object-fit:cover;
-  filter:blur(70px) brightness(.32) saturate(1.5)}
+.np-bg{position:absolute;inset:-40px;width:calc(100% + 80px);height:calc(100% + 80px);object-fit:cover;
+  filter:blur(40px) brightness(.32) saturate(1.5);transform:translateZ(0);will-change:filter}
 .np-veil{position:absolute;inset:0;background:
   radial-gradient(130% 80% at 50% 0%,var(--accg,rgba(255,85,0,.16)),transparent 55%),
   linear-gradient(180deg,rgba(8,8,13,.3),rgba(8,8,13,.82))}
@@ -261,7 +261,7 @@ html.amoled .libfilter{background:#101014}
 .stat-row{margin-bottom:14px}
 .stat-name{font-size:14px;font-weight:600;display:flex;justify-content:space-between}
 .stat-name span{color:var(--t2);font-weight:500;font-size:13px}
-.lyr{position:fixed;inset:0;z-index:130;background:rgba(8,8,13,.92);backdrop-filter:blur(28px);-webkit-backdrop-filter:blur(28px);
+.lyr{position:fixed;inset:0;z-index:130;background:rgba(8,8,13,.96);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
   visibility:hidden;opacity:0;transition:.35s;display:flex;flex-direction:column}
 .lyr.open{visibility:visible;opacity:1}
 .lyr-head{display:flex;align-items:center;gap:12px;padding:calc(var(--st) + 10px) 18px 12px;flex:none}
@@ -848,10 +848,19 @@ audio.addEventListener('loadedmetadata', () => { $('#tdur').textContent = fmt(au
 audio.addEventListener('waiting', () => setBusy(true));
 audio.addEventListener('playing', () => setBusy(false));
 audio.addEventListener('canplay',  () => setBusy(false));
+let _ttRAF = 0, _ttP = 0, _ttCur = 0;
 audio.addEventListener('timeupdate', () => {
   const d = audio.duration || (current() && current().dur) || 1;
-  const p = Math.min(1000, (audio.currentTime / d) * 1000 || 0);
-  if (!seekDrag){ seekEl.value = p; seekFill(p / 10); $('#tcur').textContent = fmt(audio.currentTime); $('#mini-bar').style.width = (p / 10) + '%'; }
+  _ttP = Math.min(1000, (audio.currentTime / d) * 1000 || 0);
+  _ttCur = audio.currentTime;
+  if (!seekDrag && !_ttRAF){
+    _ttRAF = requestAnimationFrame(() => {
+      _ttRAF = 0;
+      seekEl.value = _ttP; seekFill(_ttP / 10);
+      $('#tcur').textContent = fmt(_ttCur);
+      $('#mini-bar').style.transform = 'scaleX(' + (_ttP / 1000).toFixed(4) + ')';
+    });
+  }
   updateLyrics();
   statPend += 0.25;
   const now = Date.now();
@@ -973,7 +982,7 @@ const emptyState = (title, text, retry) =>
 function trackRow(t, i, rank){
   const liked = isLiked(t.id);
   return `<div class="row-t" data-i="${i}" data-tid="${esc(t.id)}">
-    <div class="thumb"><img loading="lazy" src="${esc(t.art) || PLACEHOLDER}" onerror="this.onerror=null;this.src=PLACEHOLDER"></div>
+    <div class="thumb"><img loading="lazy" decoding="async" src="${esc(t.art) || PLACEHOLDER}" onerror="this.onerror=null;this.src=PLACEHOLDER"></div>
     <div class="t-info">
       <div class="t-title">${esc(t.title)}</div>
       <div class="t-artist"${t.uid ? ` data-uid="${esc(t.uid)}"` : ''}>${esc(t.artist)}${t.snip ? ' · фрагмент' : ''}</div>
@@ -998,7 +1007,7 @@ async function loadCaros(){
       const row = box.querySelector(`[data-caro="${i}"] .caro-row`);
       row._list = list;
       row.innerHTML = list.slice(0, 12).map((t, j) => `<div class="card-t" data-ci="${j}">
-        <img class="card-art" loading="lazy" src="${esc(t.art) || PLACEHOLDER}" onerror="this.onerror=null;this.src=PLACEHOLDER">
+        <img class="card-art" loading="lazy" decoding="async" src="${esc(t.art) || PLACEHOLDER}" onerror="this.onerror=null;this.src=PLACEHOLDER">
         <div class="card-n">${esc(t.title)}</div>
         <div class="card-a">${esc(t.artist)}</div>
       </div>`).join('');
@@ -1079,7 +1088,7 @@ async function runSearch(q, reset){
 }
 function renderPlRows(c, pl, append){
   const html = pl.map(p => `<div class="row-t" data-pl="${esc(p.id)}">
-    <div class="thumb" style="width:64px;height:64px"><img loading="lazy" src="${esc(p.art) || PLACEHOLDER}" onerror="this.onerror=null;this.src=PLACEHOLDER"></div>
+    <div class="thumb" style="width:64px;height:64px"><img loading="lazy" decoding="async" src="${esc(p.art) || PLACEHOLDER}" onerror="this.onerror=null;this.src=PLACEHOLDER"></div>
     <div class="t-info"><div class="t-title">${esc(p.title)}</div><div class="t-artist">Плейлист${p.user ? ' · ' + esc(p.user) : ''}</div></div>
     <span class="t-dur">${p.count} тр.</span>
   </div>`).join('');
@@ -1347,7 +1356,7 @@ function setNP(t){
   setWebSession(t);
   nativeNP();
 }
-const openNP  = () => { haptic(0); $('#np').classList.add('open'); };
+const openNP  = () => { haptic(0); $('#np').classList.add('open'); if (state.viz && !viz.broken && !vizRAF) vizRAF = requestAnimationFrame(drawViz); };
 const closeNP = () => $('#np').classList.remove('open');
 $('#np-close').addEventListener('click', closeNP);
 $('#np-play').addEventListener('click', toggle);
@@ -1444,7 +1453,7 @@ function renderQueue(){
   if (!P.q.length){ c.innerHTML = '<div class="empty"><b>Очередь пуста</b><p>Выберите трек в поиске или обзоре</p></div>'; return; }
   c.innerHTML = P.q.map((t, i) => `<div class="row-t${i === P.i ? ' playing' : ''}" data-q="${i}" data-tid="${esc(t.id)}">
       ${i === P.i ? '<span class="qnum">' + EQ + '</span>' : `<span class="qnum">${i + 1}</span>`}
-      <div class="thumb"><img loading="lazy" src="${esc(t.art) || PLACEHOLDER}" onerror="this.onerror=null;this.src=PLACEHOLDER"></div>
+      <div class="thumb"><img loading="lazy" decoding="async" src="${esc(t.art) || PLACEHOLDER}" onerror="this.onerror=null;this.src=PLACEHOLDER"></div>
       <div class="t-info"><div class="t-title">${esc(t.title)}</div><div class="t-artist">${esc(t.artist)}</div></div>
       <span class="t-dur">${fmt(t.dur)}</span>
     </div>`).join('');
@@ -1657,9 +1666,10 @@ function disableVizAndReload(){
 }
 const vizCv = $('#viz'), vizCtx = vizCv.getContext('2d');
 let vizPhase = 0;
+let vizRAF = 0;
 function drawViz(ts){
-  requestAnimationFrame(drawViz);
-  if (!$('#np').classList.contains('open')) return;
+  if (!$('#np').classList.contains('open') || document.hidden){ vizRAF = 0; return; }
+  vizRAF = requestAnimationFrame(drawViz);
   const w = vizCv.width, h = vizCv.height;
   vizCtx.clearRect(0, 0, w, h);
   const acc = ACCENTS[state.accent] || ACCENTS.orange;
@@ -1683,6 +1693,11 @@ function drawViz(ts){
       else if (ts - viz.zeroSince > 7000) { disableVizAndReload(); return; }
     } else viz.zeroSince = 0;
   }
+  if (!vizCv._grad || vizCv._gradAcc !== acc[0]) {
+    const g = vizCtx.createLinearGradient(0, h, 0, 0);
+    g.addColorStop(0, acc[1]); g.addColorStop(1, acc[0] + '66');
+    vizCv._grad = g; vizCv._gradAcc = acc[0];
+  }
   for (let i = 0; i < N; i++){
     let lv;
     if (levels){ lv = levels[i]; }
@@ -1691,16 +1706,14 @@ function drawViz(ts){
     const bh = Math.max(3, lv * h);
     const x = (i + 0.25) * (w / N);
     const bw = (w / N) * 0.5;
-    const g = vizCtx.createLinearGradient(0, h - bh, 0, h);
-    g.addColorStop(0, acc[1]); g.addColorStop(1, acc[0] + '66');
-    vizCtx.fillStyle = g;
+    vizCtx.fillStyle = vizCv._grad;
     const r = Math.min(bw / 2, 3);
     vizCtx.beginPath();
     vizCtx.roundRect ? vizCtx.roundRect(x, h - bh, bw, bh, r) : vizCtx.rect(x, h - bh, bw, bh);
     vizCtx.fill();
   }
 }
-requestAnimationFrame(drawViz);
+if (state.viz) vizRAF = requestAnimationFrame(drawViz);
 
 function openPage(title, html){
   $('#page-title').textContent = title;
@@ -1716,7 +1729,7 @@ async function openArtist(uid){
   try {
     const a = await getArtist(uid);
     const head = `<div class="art-head">
-        <img class="art-ava" src="${esc(a.art) || PLACEHOLDER}" onerror="this.onerror=null;this.src=PLACEHOLDER">
+        <img class="art-ava" decoding="async" src="${esc(a.art) || PLACEHOLDER}" onerror="this.onerror=null;this.src=PLACEHOLDER">
         <div style="min-width:0">
           <div class="art-name">${esc(a.name)}</div>
           <div class="art-sub">${a.followers ? a.followers.toLocaleString('ru') + ' подписчиков' : ''}</div>
@@ -1742,7 +1755,7 @@ async function openSCPlaylist(pid){
     body._list = list;
     const first = list[0];
     body.innerHTML = `<div class="pl-head">
-        <img class="pl-cover" src="${esc(first ? first.art : '') || PLACEHOLDER}" onerror="this.onerror=null;this.src=PLACEHOLDER">
+        <img class="pl-cover" decoding="async" src="${esc(first ? first.art : '') || PLACEHOLDER}" onerror="this.onerror=null;this.src=PLACEHOLDER">
         <div class="pl-name">Плейлист SoundCloud</div>
         <div class="pl-sub">${list.length} треков</div>
       </div>` +
@@ -1959,15 +1972,16 @@ function updateLyrics(){
   if (idx === lyrActive) return;
   lyrActive = idx;
   const lines = $('#lyr-body').children;
+  let scrollTarget = null;
+  if (idx >= 0 && lines[idx]){
+    const body = $('#lyr-body');
+    scrollTarget = lines[idx].offsetTop - body.clientHeight / 2 + lines[idx].offsetHeight / 2;
+  }
   for (let i = 0; i < lines.length; i++){
     lines[i].classList.toggle('on', i === idx);
     lines[i].classList.toggle('past', i < idx);
   }
-  if (idx >= 0 && lines[idx]){
-    const body = $('#lyr-body');
-    const top = lines[idx].offsetTop - body.clientHeight / 2 + lines[idx].offsetHeight / 2;
-    body.scrollTo({ top, behavior: 'smooth' });
-  }
+  if (scrollTarget != null) $('#lyr-body').scrollTo({ top: scrollTarget, behavior: 'smooth' });
 }
 
 function updateCidUI(){
@@ -2063,7 +2077,15 @@ watchSentinel('#chart-sent', '#discover-scroll', () => {
 document.addEventListener('keydown', e => {
   if (e.code === 'Space' && !e.target.closest('input, textarea')){ e.preventDefault(); toggle(); }
 });
-document.addEventListener('visibilitychange', () => { if (document.hidden){ flushStats(); saveSession(); } });
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden){
+    flushStats(); saveSession();
+    if (viz.ctx && viz.ctx.state === 'running') viz.ctx.suspend().catch(()=>{});
+  } else {
+    if (viz.ctx && viz.ctx.state === 'suspended' && !document.body.classList.contains('paused'))
+      viz.ctx.resume().catch(()=>{});
+  }
+});
 setInterval(flushStats, 15000);
 window.addEventListener('pagehide', saveSession);
 
