@@ -10,7 +10,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="SoundWave">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' https: blob:; connect-src 'self' https://*.soundcloud.com https://*.sndcdn.com https://lrclib.net https://api.lyrics.ovh https://genius.com; font-src 'self' data:; frame-src 'self'; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' https: blob:; connect-src 'self' https://soundcloud.com https://*.soundcloud.com https://*.sndcdn.com https://lrclib.net https://api.lyrics.ovh https://genius.com; font-src 'self' data:; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icons/icon-180.png">
 <link rel="icon" href="icons/icon-192.png">
@@ -616,6 +616,9 @@ function shimResp(text, status){
   status = status || 200;
   return { ok: status >= 200 && status < 300, status, text: async () => text, json: async () => JSON.parse(text) };
 }
+function withTimeoutMs(p, ms){
+  return Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), ms))]);
+}
 async function rawFetch(url){
   let order = [];
   if (window.__swNativeFetch) order.push('native');
@@ -626,11 +629,14 @@ async function rawFetch(url){
   for (const t of order){
     try {
       if (t === 'native'){
-        const r = await window.__swNativeFetch(url);
+        const r = await withTimeoutMs(window.__swNativeFetch(url), 20000);
         transport = t;
         return shimResp(r.text, r.status);
       }
-      const r = await fetch(wrapUrl(t, url), { cache: 'no-store' });
+      const ctrl = new AbortController();
+      const to = setTimeout(() => ctrl.abort(), 20000);
+      const r = await fetch(wrapUrl(t, url), { cache: 'no-store', signal: ctrl.signal });
+      clearTimeout(to);
       transport = t; return r;
     } catch (e) { lastErr = e; }
   }
@@ -724,7 +730,10 @@ async function getStreamUrl(t){
     || trs.find(x => x.format && x.format.protocol === 'hls')
     || trs[0];
   if (!pick) throw new Error('нет потока');
-  const r = await rawFetch(pick.url + (pick.url.includes('?') ? '&' : '?') + 'client_id=' + encodeURIComponent(cid));
+  const isHls = !!(pick.format && pick.format.protocol === 'hls');
+  if (isHls && !canPlayHls()) throw new Error('HLS не поддерживается браузером');
+  const tUrl = pick.url && /^https?:\/\//.test(pick.url) ? pick.url : (API + (pick.url || ''));
+  const r = await rawFetch(tUrl + (tUrl.includes('?') ? '&' : '?') + 'client_id=' + encodeURIComponent(cid));
   if (!r.ok) throw new Error('поток ' + r.status);
   const j = await r.json();
   if (!j.url) throw new Error('нет ссылки');
@@ -768,7 +777,12 @@ const audio = window.__swNative ? {
   removeEventListener(n, f){ audioEv[n] = (audioEv[n] || []).filter(x => x !== f); }
 } : new Audio();
 if (!window.__swNative) audio.preload = 'auto';
-const P = { q: [], i: -1, playing: false, loadId: 0, mediaUrl: '', viaProxy: false, restored: false };
+function canPlayHls(){
+  if (window.__swNative) return true;
+  try { return !!(audio.canPlayType && audio.canPlayType('application/vnd.apple.mpegurl')); }
+  catch { return false; }
+}
+const P = { q: [], i: -1, playing: false, loadId: 0, mediaUrl: '', viaProxy: false, mediaHls: false, restored: false };
 let nowSource = 'Обзор';
 
 const current = () => P.q[P.i] || null;
@@ -785,7 +799,7 @@ async function loadTrack(autoplay){
   try {
     const url = await getStreamUrl(t);
     if (my !== P.loadId) return;
-    P.mediaUrl = url; P.viaProxy = false;
+    P.mediaUrl = url; P.viaProxy = false; P.mediaHls = /\.m3u8($|\?)/i.test(url);
     audio.crossOrigin = (state.viz && !viz.broken) ? 'anonymous' : null;
     audio.src = url;
     if (P.resumePos > 0){ const rp = P.resumePos; P.resumePos = 0;
@@ -795,7 +809,9 @@ async function loadTrack(autoplay){
   } catch (e) {
     if (my !== P.loadId) return;
     setBusy(false);
-    toast('Трек недоступен — пропускаю');
+    const msg = String((e && e.message) || e || '');
+    if (/HLS/i.test(msg)) toast('Трек только в HLS — недоступно в этом браузере');
+    else toast('Трек недоступен — пропускаю');
     if (autoplay && P.q.length > 1) next(true);
   }
 }
@@ -869,6 +885,11 @@ audio.addEventListener('timeupdate', () => {
 });
 audio.addEventListener('error', () => {
   if (!audio.src || !current()) return;
+  if (P.mediaHls && !canPlayHls()){
+    toast('HLS не поддерживается — пропускаю');
+    next(true);
+    return;
+  }
   if (audio.crossOrigin && state.viz && !viz.broken){
     viz.broken = true; audio.crossOrigin = null;
     const ct = audio.currentTime || 0;
@@ -878,7 +899,7 @@ audio.addEventListener('error', () => {
     toast('Визуализатор отключён для этого потока');
     return;
   }
-  if (!P.viaProxy && localProxy && P.mediaUrl && !window.__swNative){
+  if (!P.viaProxy && localProxy && P.mediaUrl && !window.__swNative && !P.mediaHls){
     P.viaProxy = true;
     audio.src = '/sc?url=' + encodeURIComponent(P.mediaUrl);
     audio.play().catch(() => {});
