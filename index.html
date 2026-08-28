@@ -284,6 +284,42 @@ html.amoled .libfilter{background:#101014}
   .art-ava{width:84px;height:84px;border-radius:20px}
   .art-name{font-size:22px}
 }
+
+/* ============ REDESIGN (premium layer) — CSS-only, perf-safe ============ */
+body{background:
+  radial-gradient(120% 80% at 100% 0%, rgba(255,85,0,.05), transparent 50%),
+  radial-gradient(100% 70% at 0% 100%, rgba(255,149,0,.045), transparent 55%),
+  var(--bg)}
+.hero-t{background-size:200% auto;animation:rdg 8s linear infinite}
+@keyframes rdg{to{background-position:200% center}}
+.hero-s{letter-spacing:.2px}
+.ltitle{background:linear-gradient(135deg,#fff,#bdbdd0);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+.searchbar{transition:border-color .2s, box-shadow .2s}
+.searchbar:focus-within{border-color:var(--acc2);box-shadow:0 0 0 3px var(--accg,rgba(255,85,0,.16))}
+.chip{transition:transform .18s, box-shadow .18s}
+.chip.on{box-shadow:0 6px 22px rgba(255,85,0,.3)}
+.card-t{transition:transform .2s cubic-bezier(.32,.72,.25,1)}
+.card-t:active{transform:scale(.97)}
+.card-art{box-shadow:0 12px 30px rgba(0,0,0,.5), 0 0 0 1px rgba(255,255,255,.04) inset}
+.row-t{transition:background .15s, transform .15s}
+.row-t:active{transform:scale(.992)}
+.np-art{box-shadow:0 30px 80px rgba(0,0,0,.7), 0 0 70px var(--accg,rgba(255,85,0,.22))}
+.np-playbtn{box-shadow:0 14px 40px var(--accg,rgba(255,90,0,.5)), 0 0 34px rgba(255,85,0,.22)}
+.np-veil{background:
+  radial-gradient(130% 80% at 50% 0%, var(--accg,rgba(255,85,0,.18)), transparent 55%),
+  linear-gradient(180deg, rgba(8,8,13,.28), rgba(8,8,13,.85))}
+.mini{box-shadow:0 12px 38px rgba(0,0,0,.55)}
+.mini.playing{border-color:rgba(255,149,0,.24);box-shadow:0 12px 38px rgba(0,0,0,.55), 0 0 26px rgba(255,85,0,.12)}
+.tab{position:relative;border-radius:12px;transition:color .2s, background .2s}
+.tab.on{background:var(--accg,rgba(255,85,0,.13))}
+.tab.on::after{content:'';position:absolute;bottom:2px;left:50%;width:4px;height:4px;border-radius:50%;background:var(--acc2);transform:translateX(-50%)}
+.lyr-line.on{text-shadow:0 0 28px var(--accg,rgba(255,120,0,.5))}
+.np-util.on{box-shadow:0 0 0 1px var(--acc2) inset, 0 0 18px rgba(255,85,0,.14)}
+.stat-num{background-size:200% auto;animation:rdg 8s linear infinite}
+.scroll{mask-image:linear-gradient(180deg, transparent 0, #000 16px, #000 calc(100% - 70px), transparent 100%);
+  -webkit-mask-image:linear-gradient(180deg, transparent 0, #000 16px, #000 calc(100% - 70px), transparent 100%)}
+.mixbtn,.playall{box-shadow:0 10px 30px rgba(255,85,0,.28)}
+.art-ava,.pl-cover{box-shadow:0 16px 44px rgba(0,0,0,.5), 0 0 50px rgba(255,85,0,.08)}
 </style>
 </head>
 <body class="paused">
