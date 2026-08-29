@@ -320,6 +320,129 @@ body{background:
   -webkit-mask-image:linear-gradient(180deg, transparent 0, #000 16px, #000 calc(100% - 70px), transparent 100%)}
 .mixbtn,.playall{box-shadow:0 10px 30px rgba(255,85,0,.28)}
 .art-ava,.pl-cover{box-shadow:0 16px 44px rgba(0,0,0,.5), 0 0 50px rgba(255,85,0,.08)}
+
+/* ============================================================
+   SOUNDWAVE v2 — premium overhaul (Spotify/Яндекс-класс, своя идентичность)
+   Оверрайдит предыдущие правила через каскад. JS-хуки + perf-safe.
+   ============================================================ */
+:root{
+  --bg:#06060b;--bg2:#0c0c14;--card:#11111c;--card2:#171724;--card3:#1e1e2e;
+  --t2:#9090a8;--t3:#5a5a70;--line:rgba(255,255,255,.06);--line2:rgba(255,255,255,.04);
+  --r:18px;--r-s:12px;--r-l:24px;--shadow:0 20px 60px rgba(0,0,0,.55);
+  --glow:0 0 60px var(--accg,rgba(255,85,0,.2));
+}
+html.amoled{--bg:#000;--bg2:#05050a;--card:#0a0a10;--card2:#101018;--line:rgba(255,255,255,.05)}
+*{ -webkit-tap-highlight-color:transparent }
+body{
+  background:
+    radial-gradient(140% 90% at 100% -10%, var(--accg,rgba(255,85,0,.07)), transparent 45%),
+    radial-gradient(120% 80% at -10% 110%, var(--accg,rgba(255,149,0,.05)), transparent 50%),
+    var(--bg);
+  color:#f4f4f8;
+  letter-spacing:.1px;
+}
+#app{background:transparent}
+.screen.active{animation:swfade .42s cubic-bezier(.16,.84,.3,1)}
+@keyframes swfade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.scroll{padding:calc(var(--st) + 18px) 18px calc(160px + var(--sb));
+  mask-image:linear-gradient(180deg, transparent 0, #000 18px, #000 calc(100% - 80px), transparent 100%);
+  -webkit-mask-image:linear-gradient(180deg, transparent 0, #000 18px, #000 calc(100% - 80px), transparent 100%)}
+
+/* Hero — крупный, фирменный */
+.hero{margin:10px 0 22px}
+.hero-t{font-size:46px;font-weight:900;letter-spacing:-2px;line-height:1.02;
+  background:linear-gradient(110deg,var(--acc),var(--acc2) 40%,#fff 130%);
+  background-size:220% auto;-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;
+  animation:swgrad 9s ease-in-out infinite}
+@keyframes swgrad{0%,100%{background-position:0 center}50%{background-position:100% center}}
+.hero-s{font-size:14px;color:var(--t2);margin-top:6px;font-weight:500;letter-spacing:.2px}
+.ltitle{font-size:30px;font-weight:850;letter-spacing:-.5px;margin:18px 0 18px;
+  background:linear-gradient(180deg,#fff,#a0a0b8);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+
+/* Search — стекло */
+.searchbar{background:var(--card);border:1px solid var(--line2);border-radius:var(--r-s);height:50px;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.03)}
+.searchbar:focus-within{border-color:var(--acc);box-shadow:0 0 0 4px var(--accg,rgba(255,85,0,.14)), inset 0 1px 0 rgba(255,255,255,.03)}
+
+/* Chips — плавающие капсулы */
+.chip{background:var(--card2);border:1px solid var(--line2);padding:9px 16px;border-radius:24px;font-weight:650}
+.chip.on{background:var(--grad);border-color:transparent;color:#fff;box-shadow:0 8px 24px rgba(255,85,0,.32)}
+
+/* Карточки-полки (Spotify-style) */
+.caro{margin:0 -18px 26px}
+.caro-h{padding:0 18px;margin-bottom:14px}
+.caro-t{font-size:21px;font-weight:850;letter-spacing:-.4px}
+.card-t{width:156px}
+.card-art{width:156px;height:156px;border-radius:var(--r);box-shadow:0 14px 34px rgba(0,0,0,.5);
+  background:var(--card2)}
+.card-t:active{transform:scale(.975)}
+.card-n{font-size:13.5px;font-weight:650;margin-top:11px}
+.card-a{font-size:12px;margin-top:3px}
+
+/* Строки списков */
+.row-t{padding:9px 8px;border-radius:var(--r-s)}
+.row-t:active{background:var(--card2)}
+.thumb{width:52px;height:52px;border-radius:10px}
+.t-title{font-size:15.5px;font-weight:650}
+.t-artist{font-size:13px;margin-top:2px}
+
+/* Bottom nav — Spotify-style */
+.tabbar{background:rgba(8,8,14,.92);backdrop-filter:blur(18px) saturate(1.1);-webkit-backdrop-filter:blur(18px) saturate(1.1);
+  border-top:1px solid var(--line2);padding:8px 6px calc(8px + var(--sb))}
+.tab{padding:4px 0;border-radius:14px}
+.tab.on{color:var(--acc2)}
+.tab.on{background:var(--accg,rgba(255,85,0,.1))}
+.tab.on::after{display:none}
+.tab svg{width:25px;height:25px}
+.tab span{font-size:10.5px;font-weight:650;letter-spacing:.3px;margin-top:2px}
+
+/* Mini-player — стекло с акцент-толчком */
+.mini{left:8px;right:8px;height:64px;background:rgba(20,20,32,.92);
+  backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);
+  border:1px solid var(--line2);border-radius:18px;
+  box-shadow:0 14px 40px rgba(0,0,0,.6)}
+.mini.playing{border-color:rgba(255,149,0,.28)}
+.mini-art{width:46px;height:46px;border-radius:11px}
+.mini-t{font-size:14.5px;font-weight:650}
+
+/* Now-playing — большой, кинетический */
+.np{background:var(--bg)}
+.np-bg{filter:blur(44px) brightness(.4) saturate(1.7);transform:translateZ(0);will-change:filter}
+.np-veil{background:
+  radial-gradient(120% 70% at 50% -5%, var(--accg,rgba(255,85,0,.22)), transparent 50%),
+  linear-gradient(180deg, rgba(6,6,11,.35) 0%, rgba(6,6,11,.82) 60%, rgba(6,6,11,.96) 100%)}
+.np-artwrap{width:min(78vw,320px);margin:14px auto 24px}
+.np-art{border-radius:26px;box-shadow:0 36px 90px rgba(0,0,0,.72), 0 0 80px var(--accg,rgba(255,85,0,.25))}
+.np-title{font-size:23px;font-weight:800;letter-spacing:-.3px}
+.np-artist{font-size:17px;margin-top:4px}
+.np-playbtn{width:82px;height:82px;border-radius:50%;background:var(--grad);
+  box-shadow:0 16px 44px var(--accg,rgba(255,90,0,.5)), 0 0 40px rgba(255,85,0,.22)}
+.np-ctl{color:rgba(255,255,255,.82)}
+.np-ctl.big{width:66px;height:66px}
+.np-util{background:rgba(255,255,255,.07);border:1px solid var(--line2);border-radius:14px;font-weight:650}
+.np-util.on{background:var(--accg,rgba(255,85,0,.16));border-color:var(--acc2);color:var(--acc2)}
+.np-quebtn{background:rgba(255,255,255,.08);border:1px solid var(--line2);border-radius:22px;font-weight:650}
+#seek{height:34px}
+#seek::-webkit-slider-runnable-track{height:6px;border-radius:3px}
+#seek::-webkit-slider-thumb{width:18px;height:18px;margin-top:-6px;box-shadow:0 3px 12px rgba(0,0,0,.6)}
+.np-times{font-size:12px;font-weight:600}
+
+/* Sheets/cards */
+.qs-panel{background:var(--bg2);border-radius:26px 26px 0 0;border:1px solid var(--line2)}
+.card{background:var(--card);border:1px solid var(--line2);border-radius:var(--r);padding:16px}
+.stat-card{background:var(--card);border:1px solid var(--line2)}
+.stat-num{font-size:30px;font-weight:900}
+.mixbtn,.playall{box-shadow:0 12px 32px rgba(255,85,0,.3);font-weight:800;letter-spacing:.2px}
+.art-ava{border-radius:30px}.pl-cover{border-radius:24px}
+
+/* Toast + skeleton */
+.toast{background:rgba(22,22,34,.97);border:1px solid var(--line2);box-shadow:0 12px 30px rgba(0,0,0,.5)}
+.sk{background:linear-gradient(100deg,var(--card) 40%,var(--card3) 50%,var(--card) 60%);background-size:200% 100%}
+.sk-line{background:linear-gradient(100deg,var(--card) 40%,var(--card3) 50%,var(--card) 60%);background-size:200% 100%}
+
+/* Свой brand-штамп: волна-разделитель под hero */
+.hero::after{content:'';display:block;height:3px;width:46px;border-radius:3px;margin-top:12px;
+  background:var(--grad);box-shadow:0 0 18px var(--accg,rgba(255,85,0,.4))}
 </style>
 </head>
 <body class="paused">
