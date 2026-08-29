@@ -34,6 +34,10 @@
           <button data-v="playlists">Плейлисты</button>
         </div>
         <div id="search-home">
+          <div class="pinned-search-wrap" id="pinned-search-wrap" hidden>
+            <p class="hint">📌 Закреплённые</p>
+            <div class="chips" id="pinned-search"></div>
+          </div>
           <div class="hist-head">
             <p class="hint" id="hist-hint" hidden>Недавние запросы</p>
             <button class="hist-clear" id="hist-clear" hidden>Очистить</button>
@@ -68,6 +72,7 @@
         <div class="surprise-wrap">
           <button class="surprise-btn" id="surprise">🎲 Удиви меня</button>
         </div>
+        <div id="daily-mixes"></div>
         <div id="onrepeat"></div>
         <div id="followed-releases"></div>
         <div id="recent-caro"></div>
@@ -146,6 +151,9 @@
           </label>
           <label class="row" style="cursor:pointer">Визуализатор звука
             <span class="switch"><input type="checkbox" id="opt-viz"><i></i></span>
+          </label>
+          <label class="row" style="cursor:pointer">Авто-уровень громкости
+            <span class="switch"><input type="checkbox" id="opt-norm"><i></i></span>
           </label>
           <div class="row" style="justify-content:flex-start;margin-top:8px"><b>Crossfade</b></div>
           <div class="crossfade-row">
@@ -287,6 +295,7 @@
           <button class="np-util" id="np-abloop">A-B</button>
           <button class="np-util" id="np-lyrics">Текст</button>
           <button class="np-util" id="np-addpl">+ Список</button>
+          <button class="np-util" id="np-comments">Комментарии</button>
         </div>
         <button class="np-quebtn" id="np-queue">Очередь</button>
       </div>

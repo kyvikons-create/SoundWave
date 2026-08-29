@@ -63,7 +63,9 @@ const state = {
   bassKnob: LS.get('bassKnob', 50),
   trebleKnob: LS.get('trebleKnob', 50),
   followed: LS.get('followed', []),
-  tabs: LS.get('tabs', {})
+  tabs: LS.get('tabs', {}),
+  savedSearches: LS.get('savedSearches', []),
+  normalize: LS.get('normalize', false)
 };
 if (state.accent === 'custom'){ ACCENTS.custom = buildCustomAccent(LS.get('accent-custom', '#ff5500')); }
 
@@ -298,6 +300,7 @@ async function playList(list, i, source){
   await loadTrack(true);
 }
 let crossfadeRAF = 0;
+function normVol(){ return state.normalize ? 0.85 : 1; }
 function cancelCrossfade(){ if (crossfadeRAF){ cancelAnimationFrame(crossfadeRAF); crossfadeRAF = 0; } }
 function startCrossfadeOut(){
   if (P.crossfading || !state.crossfade || sleepMode) return;
@@ -315,8 +318,9 @@ function startCrossfadeOut(){
   });
 }
 function startCrossfadeIn(){
-  if (!state.crossfade){ P.crossfadeIn = false; audio.volume = 1; return; }
+  if (!state.crossfade){ P.crossfadeIn = false; audio.volume = normVol(); return; }
   const startVol = audio.volume || 0;
+  const target = normVol();
   const dur = Math.min(state.crossfade, 2.5);
   const startT = performance.now();
   cancelCrossfade();
@@ -324,9 +328,9 @@ function startCrossfadeIn(){
     crossfadeRAF = 0;
     const elapsed = (performance.now() - startT) / 1000;
     const prog = Math.min(1, elapsed / dur);
-    audio.volume = startVol + (1 - startVol) * prog;
+    audio.volume = startVol + (target - startVol) * prog;
     if (prog < 1) crossfadeRAF = requestAnimationFrame(fadeIn);
-    else { P.crossfadeIn = false; P.crossfading = false; audio.volume = 1; }
+    else { P.crossfadeIn = false; P.crossfading = false; audio.volume = target; }
   });
 }
 async function loadTrack(autoplay){
@@ -334,7 +338,7 @@ async function loadTrack(autoplay){
   const wasCrossfade = P.crossfading;
   cancelCrossfade();
   P.crossfading = false;
-  if (wasCrossfade) P.crossfadeIn = true; else { P.crossfadeIn = false; audio.volume = 1; }
+  if (wasCrossfade) P.crossfadeIn = true; else { P.crossfadeIn = false; audio.volume = normVol(); }
   const my = ++P.loadId;
   setBusy(true); showMini(t); setNP(t); pushHistory(t);
   try {
@@ -398,7 +402,7 @@ audio.addEventListener('play',  () => {
   if (P.crossfadeIn){ startCrossfadeIn(); }
 });
 audio.addEventListener('pause', () => { P.playing = false; syncPlayUI(); nativeNP(); flushStats(); saveSession();
-  if (P.crossfading && !P.crossfadeIn){ cancelCrossfade(); P.crossfading = false; audio.volume = 1; }
+  if (P.crossfading && !P.crossfadeIn){ cancelCrossfade(); P.crossfading = false; audio.volume = normVol(); }
 });
 audio.addEventListener('ended', () => {
   if (sleepMode === 'end'){ resetSleep('Конец трека — спокойной ночи 🌙'); audio.pause(); return; }
@@ -793,10 +797,71 @@ function renderSearchHistory(){
   const hc = $('#hist-clear'); if (hc) hc.hidden = !h.length;
   $('#hist').innerHTML = h.map(s => `<button class="chip on" data-sq="${esc(s)}">${esc(s)}</button>`).join('');
 }
+function renderSavedSearches(){
+  const saved = state.savedSearches || [];
+  const wrap = $('#pinned-search-wrap');
+  if (wrap) wrap.hidden = !saved.length;
+  const c = $('#pinned-search'); if (!c) return;
+  c.innerHTML = saved.map(s => `<div class="chip pin-chip" data-psq="${esc(s)}"><span>${esc(s)}</span><button class="pin-x" data-unpin="${esc(s)}" aria-label="Открепить">×</button></div>`).join('');
+}
+function pinSearch(q){
+  if (!q) return;
+  state.savedSearches = state.savedSearches.filter(s => s !== q);
+  state.savedSearches.unshift(q);
+  state.savedSearches = state.savedSearches.slice(0, 12);
+  LS.set('savedSearches', state.savedSearches);
+  renderSavedSearches();
+  toast('Поиск закреплён');
+  haptic(0);
+}
+function unpinSearch(q){
+  state.savedSearches = state.savedSearches.filter(s => s !== q);
+  LS.set('savedSearches', state.savedSearches);
+  renderSavedSearches();
+  toast('Откреплено');
+  haptic(0);
+}
+function searchActionSheet(q){
+  openSheet('Поиск: ' + q,
+    `<button class="btn" id="sh-pin" style="margin-top:10px;width:100%">📌 Закрепить</button>
+     <button class="btn" id="sh-run" style="margin-top:8px;width:100%">▶ Найти</button>`);
+  $('#qs-list').onclick = ev => {
+    if (ev.target.closest('#sh-pin')){ closeSheet(); pinSearch(q); }
+    else if (ev.target.closest('#sh-run')){ closeSheet(); $('#q').value = q; $('#qclear').hidden = false; runSearch(q, true); }
+  };
+}
 $('#hist').addEventListener('click', e => {
+  if ($('#hist')._swLP){ $('#hist')._swLP = false; return; }
   const b = e.target.closest('[data-sq]'); if (!b) return;
   $('#q').value = b.dataset.sq; $('#qclear').hidden = false;
   runSearch(b.dataset.sq, true);
+});
+(() => {
+  const el = $('#hist');
+  let lpT = null, lpY = 0;
+  el.addEventListener('touchstart', e => {
+    const b = e.target.closest('[data-sq]'); if (!b) return;
+    lpY = e.touches[0].clientY;
+    lpT = setTimeout(() => {
+      lpT = null; el._swLP = true; haptic(1);
+      searchActionSheet(b.dataset.sq);
+    }, 500);
+  }, { passive: true });
+  el.addEventListener('touchmove', e => {
+    if (lpT && Math.abs(e.touches[0].clientY - lpY) > 10){ clearTimeout(lpT); lpT = null; }
+  }, { passive: true });
+  el.addEventListener('touchend', () => { if (lpT){ clearTimeout(lpT); lpT = null; } }, { passive: true });
+  el.addEventListener('contextmenu', e => {
+    const b = e.target.closest('[data-sq]'); if (!b) return;
+    e.preventDefault(); searchActionSheet(b.dataset.sq);
+  });
+})();
+$('#pinned-search').addEventListener('click', e => {
+  const x = e.target.closest('[data-unpin]');
+  if (x){ unpinSearch(x.dataset.unpin); return; }
+  const b = e.target.closest('[data-psq]'); if (!b) return;
+  $('#q').value = b.dataset.psq; $('#qclear').hidden = false;
+  runSearch(b.dataset.psq, true);
 });
 $('#hist-clear').addEventListener('click', () => { LS.set('shistory', []); renderSearchHistory(); toast('История поиска очищена'); });
 function pushSearchHistory(q){
@@ -806,6 +871,7 @@ function pushSearchHistory(q){
   renderSearchHistory();
 }
 renderSearchHistory();
+renderSavedSearches();
 
 const GENRES = [
   ['Всё', 'popular'], ['Хип-хоп', 'hip hop'], ['Поп', 'pop'], ['Электроника', 'electronic'],
@@ -884,6 +950,49 @@ function surprise(){
   toast('🎲 ' + q);
 }
 $('#surprise').addEventListener('click', surprise);
+function buildDailyMixes(){
+  const stats = state.stats || {};
+  const topArtists = Object.entries(stats.art || {}).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([n]) => n);
+  const dist = genreDistribution();
+  const topGenres = dist.slice(0, 5);
+  const mixes = [];
+  const fallback = [['lofi', 'Lofi'], ['hip hop', 'Хип-хоп'], ['electronic', 'Электроника'], ['rock', 'Рок'], ['pop', 'Поп']];
+  for (let i = 0; i < 5; i++){
+    if (topArtists[i]){
+      const g = topGenres[i % Math.max(topGenres.length, 1)];
+      mixes.push({ name: 'Daily Mix ' + (i + 1), query: topArtists[i], sub: g ? g.n : 'На основе прослушиваний' });
+    } else if (topGenres[i]){
+      mixes.push({ name: 'Daily Mix ' + (i + 1), query: topGenres[i].n, sub: topGenres[i].n });
+    } else if (fallback[i]){
+      mixes.push({ name: 'Daily Mix ' + (i + 1), query: fallback[i][0], sub: fallback[i][1] });
+    }
+  }
+  return mixes;
+}
+function renderDailyMixes(){
+  const box = $('#daily-mixes'); if (!box) return;
+  const mixes = buildDailyMixes();
+  if (!mixes.length){ box.innerHTML = ''; return; }
+  box.innerHTML = `<div class="caro"><div class="caro-h"><div class="caro-t">Твои миксы</div></div>
+    <div class="caro-row">${mixes.map((m, i) => `<div class="dmix-card" data-dmi="${i}">
+      <div class="dmix-art"><span class="dmix-n">${i + 1}</span></div>
+      <div class="card-n">${esc(m.name)}</div><div class="card-a">${esc(m.sub)}</div></div>`).join('')}</div></div>`;
+  box.querySelector('.caro-row')._mixes = mixes;
+}
+$('#daily-mixes').addEventListener('click', e => {
+  const c = e.target.closest('[data-dmi]'); if (!c) return;
+  const row = c.closest('.caro-row'); const mixes = (row && row._mixes) || [];
+  const i = +c.dataset.dmi;
+  if (!mixes[i]) return;
+  const q = mixes[i].query;
+  showScreen('search');
+  $('#q').value = q; $('#qclear').hidden = false;
+  searchState.mode = 'tracks';
+  $$('#search-seg button').forEach(x => x.classList.toggle('on', x.dataset.v === 'tracks'));
+  $('#search-home').style.display = 'none';
+  haptic(0);
+  runSearch(q, true);
+});
 function renderOnRepeat(){
   const box = $('#onrepeat'); if (!box) return;
   const trk = state.stats.trk || {};
@@ -1153,7 +1262,7 @@ function showScreen(s){
   $$('.screen').forEach(el => el.classList.toggle('active', el.id === 'scr-' + s));
   $$('.tab').forEach(b => b.classList.toggle('on', b.dataset.s === s));
   if (s === 'discover' && !discoverState.loaded){ discoverState.loaded = true; loadDiscover(true); }
-  if (s === 'discover') { renderOnRepeat(); renderFollowedReleases(); }
+  if (s === 'discover') { renderDailyMixes(); renderOnRepeat(); renderFollowedReleases(); }
   if (s === 'library') renderLib();
 }
 $$('.tab').forEach(b => b.addEventListener('click', () => { haptic(0); showScreen(b.dataset.s); }));
@@ -1245,6 +1354,29 @@ $('#np-prev').addEventListener('click', prev);
 $('#np-like').addEventListener('click', () => { const t = current(); if (t) toggleLike(t.id); });
 $('#np-artist').addEventListener('click', () => { const t = current(); if (t && t.uid) openArtist(t.uid); });
 $('#np-addpl').addEventListener('click', () => { const t = current(); if (t) addToPlaylistSheet(t); });
+$('#np-comments').addEventListener('click', async () => {
+  const t = current(); if (!t) return;
+  openSheet('Комментарии', '<div class="sk-line"></div><div class="sk-line" style="width:70%"></div>' + '<div class="sk-line"></div>'.repeat(2));
+  try {
+    const j = await apiGet('/tracks/' + t.id + '/comments', { limit: 50 });
+    const items = (j.collection || []).filter(c => c.body).map(c => ({
+      name: (c.user && c.user.username) || 'Аноним',
+      avatar: ((c.user && c.user.avatar_url) || '').replace('-large.', '-t500x500.'),
+      text: c.body || '',
+      time: c.timestamp ? fmt(c.timestamp / 1000) : ''
+    }));
+    if (!items.length){
+      $('#qs-list').innerHTML = '<p class="note" style="text-align:center;padding:30px">Нет комментариев</p>';
+      return;
+    }
+    $('#qs-list').innerHTML = items.map(c => `<div class="cmt">
+      <img class="cmt-ava" loading="lazy" src="${esc(c.avatar) || PLACEHOLDER}" onerror="this.onerror=null;this.src=PLACEHOLDER">
+      <div class="cmt-body"><div class="cmt-h"><span class="cmt-n">${esc(c.name)}</span>${c.time ? `<span class="cmt-t">${esc(c.time)}</span>` : ''}</div>
+      <div class="cmt-txt">${esc(c.text)}</div></div></div>`).join('');
+  } catch {
+    $('#qs-list').innerHTML = '<p class="note" style="text-align:center;padding:30px">Комментарии недоступны</p>';
+  }
+});
 $('#np-radio').addEventListener('click', () => {
   state.autoRelated = !state.autoRelated;
   LS.set('autorel', state.autoRelated);
@@ -1547,7 +1679,7 @@ let sleepMode = 0, sleepTimerT = null, sleepFadeI = null;
 function resetSleep(msg){
   clearTimeout(sleepTimerT); clearInterval(sleepFadeI);
   sleepTimerT = null; sleepFadeI = null; sleepMode = 0;
-  audio.volume = 1;
+  audio.volume = normVol();
   const b = $('#np-timer');
   b.textContent = 'Таймер'; b.classList.remove('on');
   if (msg) toast(msg);
@@ -1557,7 +1689,7 @@ $('#np-timer').addEventListener('click', () => {
   const cur = steps.indexOf(sleepMode);
   const nx = steps[(cur + 1) % steps.length];
   clearTimeout(sleepTimerT); clearInterval(sleepFadeI); sleepTimerT = null; sleepFadeI = null;
-  sleepMode = 0; audio.volume = 1;
+  sleepMode = 0; audio.volume = normVol();
   const b = $('#np-timer');
   if (nx === 0){ resetSleep('Таймер выключен'); return; }
   if (nx === 'end'){ sleepMode = 'end'; b.textContent = 'Конец трека'; b.classList.add('on'); toast('Пауза в конце трека'); return; }
@@ -1898,8 +2030,62 @@ function genreDonutHTML(){
   if (acc < 100) stops.push('#2b2b40 ' + acc + '% 100%');
   return '<div class="donut"><div class="donut-ring" style="background:conic-gradient(' + stops.join(',') + ')"><div class="donut-hole"><b>' + dist.length + '</b><span>жанров</span></div></div><div class="donut-legend">' + dist.map((d, i) => '<div class="lg-row"><span class="lg-dot" style="background:' + PAL[i % PAL.length] + '"></span><span class="lg-n">' + esc(d.n) + '</span><span class="lg-v">' + d.pct + '%</span></div>').join('') + '</div></div>';
 }
+function moodAnalysis(){
+  const dist = genreDistribution();
+  const stats = state.stats || {};
+  const topArtists = Object.keys(stats.art || {}).slice(0, 10);
+  if (!dist.length && !topArtists.length) return null;
+  let energetic = 0, calm = 0;
+  for (const d of dist){
+    const n = d.n.toLowerCase();
+    if (/электрон|хип-хоп|hip/.test(n)) energetic += d.c;
+    if (/чилл|джаз|блюз/.test(n)) calm += d.c;
+  }
+  const at = topArtists.join(' ').toLowerCase();
+  if (/phonk|trap|трэп|rap|рейп|edm|dubstep|dnb|drum/.test(at)) energetic += 3;
+  if (/lofi|ambient|эмбиент|sleep|chill|jazz|джаз/.test(at)) calm += 3;
+  const eclectic = dist.length;
+  let mood, emoji, desc;
+  if (energetic > calm * 1.2 && energetic > 0){
+    mood = 'Энергичное'; emoji = '⚡';
+    desc = 'Вы любите ритмичную и драйвовую музыку — хип-хоп, электроника, рок.';
+  } else if (calm > energetic * 1.2 && calm > 0){
+    mood = 'Спокойное'; emoji = '🌙';
+    desc = 'Чилл, лофи и эмбиент — ваша музыка для отдыха и концентрации.';
+  } else if (eclectic >= 4){
+    mood = 'Разнообразное'; emoji = '🎨';
+    desc = 'Ваш вкус охватывает много жанров — от спокойного до энергичного.';
+  } else {
+    mood = 'Сбалансированное'; emoji = '🎵';
+    desc = 'Равновесие между энергией и спокойствием в вашем плейлисте.';
+  }
+  return { mood, emoji, desc };
+}
+function yearWrappedHTML(s){
+  const trks = s.trk ? Object.values(s.trk).filter(x => x && x.s).sort((a, b) => b.s - a.s) : [];
+  const arts = Object.entries(s.art || {}).sort((a, b) => b[1] - a[1]);
+  const dist = genreDistribution();
+  const topTrack = trks[0];
+  const topArtist = arts[0];
+  const topGenre = dist[0];
+  const totalMin = Math.round((s.sec || 0) / 60);
+  const year = new Date().getFullYear();
+  return `<div class="year-wrap">
+    <div class="yw-bg"></div>
+    <div class="yw-content">
+      <div class="yw-label">Твой ${year}</div>
+      <div class="yw-stats">
+        <div class="yw-stat"><span class="yw-val">${Math.floor(totalMin / 60)}ч ${totalMin % 60}м</span><span class="yw-key">слушали</span></div>
+        <div class="yw-stat"><span class="yw-val">${esc(topArtist ? topArtist[0] : '—')}</span><span class="yw-key">топ-артист</span></div>
+        <div class="yw-stat"><span class="yw-val">${esc(topGenre ? topGenre.n : '—')}</span><span class="yw-key">топ-жанр</span></div>
+      </div>
+      ${topTrack ? `<div class="yw-track"><div class="yw-track-lbl">Топ-трек года</div><div class="yw-track-n">${esc(topTrack.t)}</div><div class="yw-track-a">${esc(topTrack.a)}</div></div>` : ''}
+    </div>
+  </div>`;
+}
 function openStats(){
   const s = state.stats || {sec:0, art:{}, day:{}, trk:{}};
+  const mood = moodAnalysis();
   const totalSec = s.sec || 0;
   const hh = Math.floor(totalSec / 3600);
   const mm = Math.floor((totalSec % 3600) / 60);
@@ -1928,6 +2114,10 @@ function openStats(){
       <div class="stat-card"><div class="stat-num">${Math.round(weekSec / 60)}м</div><div class="stat-lbl">за 7 дней</div></div>
       <div class="stat-card"><div class="stat-num">${s.tracks || 0}</div><div class="stat-lbl">воспроизведений</div></div>
       <div class="stat-card"><div class="stat-num">${state.likes.length}</div><div class="stat-lbl">в любимых</div></div>
+    </div>
+    ${yearWrappedHTML(s)}
+    <div class="card mood-card">
+      ${mood ? `<div class="mood-ic">${mood.emoji}</div><div class="mood-info"><div class="mood-t">Твоё настроение</div><div class="mood-n">${esc(mood.mood)}</div><div class="mood-d">${esc(mood.desc)}</div></div>` : '<p class="note" style="margin:0">Послушайте больше — настроение появится здесь</p>'}
     </div>
     <div class="card" style="margin-top:0">
       <div class="row" style="justify-content:flex-start"><b>Активность за неделю</b></div>
@@ -1966,12 +2156,13 @@ function buildBackup(){
     v: 2, app: 'soundwave', date: new Date().toISOString(),
     likes: state.likes, playlists: state.playlists, history: state.history, stats: state.stats,
     pinned: state.pinned, followed: state.followed,
+    savedSearches: state.savedSearches,
     settings: {
       accent: state.accent, theme: state.theme, amoled: state.amoled,
       autoRelated: state.autoRelated, fullOnly: state.fullOnly, viz: state.viz,
       vizMode: state.vizMode, eq: state.eq, shuffle: state.shuffle, repeat: state.repeat, abLoop: state.abLoop,
       karaoke: state.karaoke, crossfade: state.crossfade, bassKnob: state.bassKnob,
-      trebleKnob: state.trebleKnob, tabs: state.tabs
+      trebleKnob: state.trebleKnob, tabs: state.tabs, normalize: state.normalize
     }
   };
 }
@@ -1981,6 +2172,7 @@ function applySettingsUI(){
   const au = $('#opt-auto'); if (au) au.checked = state.autoRelated;
   const fo = $('#opt-full'); if (fo) fo.checked = state.fullOnly;
   const vz = $('#opt-viz'); if (vz) vz.checked = state.viz;
+  const nm = $('#opt-norm'); if (nm) nm.checked = state.normalize;
   $('#np-shuffle').classList.toggle('on', state.shuffle);
   syncRepeat(); syncAB();
 }
@@ -2018,6 +2210,7 @@ $('#imp-file').addEventListener('change', e => {
       if (Array.isArray(j.history)) state.history = j.history.slice(0, 100);
       if (Array.isArray(j.pinned)) state.pinned = j.pinned;
       if (Array.isArray(j.followed)) state.followed = j.followed;
+      if (Array.isArray(j.savedSearches)) state.savedSearches = j.savedSearches;
       if (j.stats) state.stats = j.stats;
       if (j.settings){
         Object.assign(state, j.settings);
@@ -2029,11 +2222,13 @@ $('#imp-file').addEventListener('change', e => {
         LS.set('karaoke', state.karaoke); syncKaraokeBtn();
         LS.set('crossfade', state.crossfade); LS.set('bassKnob', state.bassKnob);
         LS.set('trebleKnob', state.trebleKnob); LS.set('tabs', state.tabs);
+        LS.set('normalize', state.normalize);
         applyTheme(); applyTabsVisibility();
       }
       LS.set('likes', state.likes); LS.set('playlists', state.playlists);
       LS.set('history', state.history); LS.set('stats', state.stats);
       LS.set('pinned', state.pinned); LS.set('followed', state.followed);
+      LS.set('savedSearches', state.savedSearches);
       applySettingsUI();
       if (curScreen === 'library') renderLib();
       renderRecentCaro();
@@ -2364,6 +2559,12 @@ $('#opt-viz').addEventListener('change', e => {
     setTimeout(() => location.reload(), 1400);
   }
 });
+$('#opt-norm').checked = state.normalize;
+$('#opt-norm').addEventListener('change', e => {
+  state.normalize = e.target.checked; LS.set('normalize', state.normalize);
+  audio.volume = normVol();
+  toast(e.target.checked ? 'Авто-уровень включён (85%)' : 'Авто-уровень выключен');
+});
 $('#clr-hist').addEventListener('click', () => { state.history = []; LS.set('history', []); if (curScreen === 'library') renderLib(); renderRecentCaro(); toast('История очищена'); });
 $('#clr-likes').addEventListener('click', () => {
   if (!confirm('Удалить все любимые треки?')) return;
@@ -2381,7 +2582,7 @@ if (crossfadeSlider){
     state.crossfade = +crossfadeSlider.value; LS.set('crossfade', state.crossfade);
     crossfadeSlider.style.setProperty('--val', (state.crossfade / 12 * 100) + '%');
     $('#crossfade-val').textContent = state.crossfade ? state.crossfade + 'с' : 'выкл';
-    if (!state.crossfade){ cancelCrossfade(); P.crossfading = false; P.crossfadeIn = false; audio.volume = 1; }
+    if (!state.crossfade){ cancelCrossfade(); P.crossfading = false; P.crossfadeIn = false; audio.volume = normVol(); }
   });
 }
 $$('.tab-toggle').forEach(cb => {
@@ -2585,6 +2786,7 @@ $('#onboard-skip').addEventListener('click', () => { closeOnboard(); haptic(0); 
   loadDiscover(true);
   loadCaros();
   renderRecentCaro();
+  renderDailyMixes();
   renderOnRepeat();
   renderFollowedReleases();
   if (!LS.get('onboarded', false)) showOnboard();
