@@ -35,6 +35,8 @@ for c in blue pink green; do
   fi
 done
 cp index.html "$APP/www/index.html"
+cp style.css "$APP/www/style.css"
+cp app.js "$APP/www/app.js"
 
 WIDGET_OK=0
 if xcrun --sdk iphoneos swiftc -target arm64-apple-ios16.2 \
