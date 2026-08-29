@@ -58,7 +58,12 @@ const state = {
   eq: LS.get('eq', 'flat'),
   abLoop: null,
   pinned: LS.get('pinned', []),
-  karaoke: LS.get('karaoke', false)
+  karaoke: LS.get('karaoke', false),
+  crossfade: LS.get('crossfade', 0),
+  bassKnob: LS.get('bassKnob', 50),
+  trebleKnob: LS.get('trebleKnob', 50),
+  followed: LS.get('followed', []),
+  tabs: LS.get('tabs', {})
 };
 if (state.accent === 'custom'){ ACCENTS.custom = buildCustomAccent(LS.get('accent-custom', '#ff5500')); }
 
@@ -83,6 +88,11 @@ const I = {
   heart: '<svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>',
   heartF:'<svg viewBox="0 0 24 24" width="21" height="21" fill="currentColor" stroke="currentColor" stroke-width="1" stroke-linejoin="round"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>',
   note:  '<svg viewBox="0 0 24 24" width="46" height="46" fill="none" stroke="#8e8ea3" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>'
+};
+const EMPTY_SVG = {
+  search: '<svg viewBox="0 0 120 96" width="120" height="96" fill="none" stroke-linecap="round" stroke-linejoin="round"><circle cx="52" cy="42" r="30" stroke="var(--acc2)" stroke-width="5" opacity=".35"/><circle cx="52" cy="42" r="20" stroke="var(--acc)" stroke-width="4"/><path d="M70 60l20 20" stroke="var(--acc)" stroke-width="6"/><path d="M44 42h16M52 34v16" stroke="var(--acc2)" stroke-width="3" opacity=".7"/></svg>',
+  library: '<svg viewBox="0 0 120 96" width="120" height="96" fill="none" stroke-linecap="round" stroke-linejoin="round"><rect x="20" y="22" width="22" height="56" rx="5" stroke="var(--acc)" stroke-width="4"/><rect x="48" y="30" width="22" height="48" rx="5" stroke="var(--acc2)" stroke-width="4" opacity=".55"/><rect x="76" y="18" width="22" height="60" rx="5" stroke="var(--acc)" stroke-width="4"/><circle cx="31" cy="70" r="6" stroke="var(--acc2)" stroke-width="3"/><circle cx="87" cy="66" r="7" stroke="var(--acc2)" stroke-width="3"/></svg>',
+  queue: '<svg viewBox="0 0 120 96" width="120" height="96" fill="none" stroke-linecap="round" stroke-linejoin="round"><rect x="14" y="18" width="92" height="60" rx="10" stroke="var(--acc)" stroke-width="4"/><path d="M14 38h92" stroke="var(--acc2)" stroke-width="3" opacity=".5"/><circle cx="26" cy="28" r="3" fill="var(--acc2)"/><rect x="26" y="50" width="50" height="5" rx="2.5" stroke="var(--acc2)" stroke-width="2.5"/><rect x="26" y="62" width="35" height="5" rx="2.5" stroke="var(--acc)" stroke-width="2.5" opacity=".6"/><circle cx="88" cy="52" r="11" stroke="var(--acc)" stroke-width="3.5"/><path d="M84 52l3 3 6-6" stroke="var(--acc2)" stroke-width="3"/></svg>'
 };
 const PLACEHOLDER = 'data:image/svg+xml,' + encodeURIComponent(
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2b2b40"/><stop offset="1" stop-color="#191926"/></linearGradient></defs><rect width="120" height="120" fill="url(#g)"/><path d="M52 82c-7.2 0-13-5.8-13-13s5.8-13 13-13c1.4 0 2.7.2 4 .6V42h-5v-5h10v32.2c0 7-5.8 12.8-13 12.8Z" fill="#45455e" transform="translate(9 -4)"/></svg>');
@@ -277,7 +287,7 @@ function canPlayHls(){
   try { return !!(audio.canPlayType && audio.canPlayType('application/vnd.apple.mpegurl')); }
   catch { return false; }
 }
-const P = { q: [], i: -1, playing: false, loadId: 0, mediaUrl: '', viaProxy: false, mediaHls: false, restored: false };
+const P = { q: [], i: -1, playing: false, loadId: 0, mediaUrl: '', viaProxy: false, mediaHls: false, restored: false, crossfading: false, crossfadeIn: false };
 let nowSource = 'Обзор';
 
 const current = () => P.q[P.i] || null;
@@ -287,8 +297,44 @@ async function playList(list, i, source){
   P.q = list.slice(); P.i = i;
   await loadTrack(true);
 }
+let crossfadeRAF = 0;
+function cancelCrossfade(){ if (crossfadeRAF){ cancelAnimationFrame(crossfadeRAF); crossfadeRAF = 0; } }
+function startCrossfadeOut(){
+  if (P.crossfading || !state.crossfade || sleepMode) return;
+  P.crossfading = true;
+  const startVol = audio.volume || 1;
+  const dur = Math.max(0.4, Math.min(state.crossfade, audio.duration - audio.currentTime || state.crossfade));
+  const startT = performance.now();
+  cancelCrossfade();
+  crossfadeRAF = requestAnimationFrame(function fade(){
+    crossfadeRAF = 0;
+    const elapsed = (performance.now() - startT) / 1000;
+    const prog = Math.min(1, elapsed / dur);
+    audio.volume = Math.max(0, startVol * (1 - prog));
+    if (prog < 1 && P.crossfading) crossfadeRAF = requestAnimationFrame(fade);
+  });
+}
+function startCrossfadeIn(){
+  if (!state.crossfade){ P.crossfadeIn = false; audio.volume = 1; return; }
+  const startVol = audio.volume || 0;
+  const dur = Math.min(state.crossfade, 2.5);
+  const startT = performance.now();
+  cancelCrossfade();
+  crossfadeRAF = requestAnimationFrame(function fadeIn(){
+    crossfadeRAF = 0;
+    const elapsed = (performance.now() - startT) / 1000;
+    const prog = Math.min(1, elapsed / dur);
+    audio.volume = startVol + (1 - startVol) * prog;
+    if (prog < 1) crossfadeRAF = requestAnimationFrame(fadeIn);
+    else { P.crossfadeIn = false; P.crossfading = false; audio.volume = 1; }
+  });
+}
 async function loadTrack(autoplay){
   const t = current(); if (!t) return;
+  const wasCrossfade = P.crossfading;
+  cancelCrossfade();
+  P.crossfading = false;
+  if (wasCrossfade) P.crossfadeIn = true; else { P.crossfadeIn = false; audio.volume = 1; }
   const my = ++P.loadId;
   setBusy(true); showMini(t); setNP(t); pushHistory(t);
   try {
@@ -349,8 +395,11 @@ audio.addEventListener('play',  () => {
   nativeCmd({cmd:'resumesession'});
   if (state.viz && !viz.ctx && !viz.broken) initViz();
   resumeViz();
+  if (P.crossfadeIn){ startCrossfadeIn(); }
 });
-audio.addEventListener('pause', () => { P.playing = false; syncPlayUI(); nativeNP(); flushStats(); saveSession(); });
+audio.addEventListener('pause', () => { P.playing = false; syncPlayUI(); nativeNP(); flushStats(); saveSession();
+  if (P.crossfading && !P.crossfadeIn){ cancelCrossfade(); P.crossfading = false; audio.volume = 1; }
+});
 audio.addEventListener('ended', () => {
   if (sleepMode === 'end'){ resetSleep('Конец трека — спокойной ночи 🌙'); audio.pause(); return; }
   next(true);
@@ -377,6 +426,10 @@ audio.addEventListener('timeupdate', () => {
   }
   updateLyrics();
   statPend += 0.25;
+  if (state.crossfade > 0 && !P.crossfading && !sleepMode && !seekDrag && audio.duration > 0){
+    const rem = audio.duration - audio.currentTime;
+    if (rem > 0 && rem <= state.crossfade) startCrossfadeOut();
+  }
   const now = Date.now();
   if (now - npSent > 5000){ npSent = now; nativeNP(); }
   if (now - sessSaved > 10000){ sessSaved = now; saveSession(); }
@@ -474,6 +527,14 @@ function flushStats(){
 }
 
 const isLiked = id => state.likes.some(x => x.id === id);
+const isFollowed = uid => state.followed.some(x => x.uid === uid);
+function toggleFollow(artist){
+  if (isFollowed(artist.uid)) state.followed = state.followed.filter(x => x.uid !== artist.uid);
+  else state.followed.unshift({ uid: artist.uid, name: artist.name, art: artist.art });
+  LS.set('followed', state.followed);
+  toast(isFollowed(artist.uid) ? 'Отслеживание включено' : 'Вы отписались');
+  haptic(1);
+}
 function findTrack(id){
   let t = P.q.find(x => x.id === id);
   if (t) return t;
@@ -503,8 +564,8 @@ function pushHistory(t){
 
 const skeleton = n => Array.from({ length: n }, () =>
   '<div class="skrow"><div class="sk" style="width:56px;height:56px;flex:none"></div><div style="flex:1"><div class="sk" style="height:14px;width:72%;margin-bottom:9px"></div><div class="sk" style="height:11px;width:42%"></div></div></div>').join('');
-const emptyState = (title, text, retry) =>
-  `<div class="empty">${I.note}<b>${esc(title)}</b><p>${esc(text)}</p>${retry ? '<button class="chip on" data-retry>Повторить</button>' : ''}</div>`;
+const emptyState = (title, text, retry, icon) =>
+  `<div class="empty">${EMPTY_SVG[icon] || I.note}<b>${esc(title)}</b><p>${esc(text)}</p>${retry ? '<button class="chip on" data-retry>Повторить</button>' : ''}</div>`;
 
 function trackRow(t, i, rank){
   const liked = isLiked(t.id);
@@ -672,20 +733,20 @@ async function runSearch(q, reset){
     if (searchState.mode === 'playlists'){
       const pl = await searchPlaylists(q, searchState.offset);
       if (searchState.q !== q) return;
-      if (reset){ renderPlRows(c, pl); if (!pl.length) c.innerHTML = emptyState('Ничего не найдено', 'Попробуйте другой запрос'); }
+      if (reset){ renderPlRows(c, pl); if (!pl.length) c.innerHTML = emptyState('Ничего не найдено', 'Попробуйте другой запрос', false, 'search'); }
       else if (pl.length){ renderPlRows(c, pl, true); }
       searchState.offset += pl.length;
       searchState.done = pl.length < 20;
     } else {
       const list = await searchTracks(q, searchState.offset);
       if (searchState.q !== q) return;
-      if (reset){ searchState.list = list; renderList(c, list); if (!list.length) c.innerHTML = emptyState('Ничего не найдено', 'Попробуйте другой запрос или проверьте ключ в настройках'); else pushSearchHistory(q); }
+      if (reset){ searchState.list = list; renderList(c, list); if (!list.length) c.innerHTML = emptyState('Ничего не найдено', 'Попробуйте другой запрос или проверьте ключ в настройках', false, 'search'); else pushSearchHistory(q); }
       else if (list.length){ renderList(c, list, { append: true }); searchState.list = c._list; }
       searchState.offset += list.length;
       searchState.done = list.length < 30;
     }
   } catch (e) {
-    if (reset){ c.innerHTML = emptyState('Не удалось загрузить', String(e.message || e), true); c._retry = () => runSearch(q, true); }
+    if (reset){ c.innerHTML = emptyState('Не удалось загрузить', String(e.message || e), true, 'search'); c._retry = () => runSearch(q, true); }
   }
   searchState.loading = false;
 }
@@ -803,6 +864,26 @@ $('#decades').addEventListener('click', e => {
   haptic(0);
   runSearch(q, true);
 });
+const SURPRISE_POOL = [
+  'lofi hip hop','phonk','drum and bass','synthwave','vaporwave','future garage','chillwave','tropical house',
+  'deep house','melodic techno','future bass','dubstep','trance','ambient','darksynth','nu disco',
+  'indie rock','post rock','shoegaze','psychedelic rock','jazz fusion','neo soul','funk','blues rock',
+  'The Weeknd','Daft Punk','Bonobo','Tycho','ODESZA','Glass Animals','Tame Impala','Massive Attack'
+];
+function surprise(){
+  const q = SURPRISE_POOL[Math.floor(Math.random() * SURPRISE_POOL.length)];
+  showScreen('search');
+  const input = $('#q');
+  input.value = q;
+  $('#qclear').hidden = false;
+  searchState.mode = 'tracks';
+  $$('#search-seg button').forEach(x => x.classList.toggle('on', x.dataset.v === 'tracks'));
+  $('#search-home').style.display = 'none';
+  haptic(0);
+  runSearch(q, true);
+  toast('🎲 ' + q);
+}
+$('#surprise').addEventListener('click', surprise);
 function renderOnRepeat(){
   const box = $('#onrepeat'); if (!box) return;
   const trk = state.stats.trk || {};
@@ -825,6 +906,34 @@ $('#onrepeat').addEventListener('click', e => {
   haptic(0);
   if (list[i]) playList(list, i, 'On Repeat');
 });
+async function renderFollowedReleases(){
+  const box = $('#followed-releases'); if (!box) return;
+  const followed = state.followed || [];
+  if (!followed.length){ box.innerHTML = ''; return; }
+  box.innerHTML = `<div class="caro"><div class="caro-h"><div class="caro-t">Новые релизы</div></div>
+    <div class="caro-row">${'<div class="card-t"><div class="card-art sk"></div><div class="sk" style="height:12px;margin-top:8px"></div></div>'.repeat(4)}</div></div>`;
+  let all = [];
+  for (const fa of followed.slice(0, 6)){
+    try {
+      const list = await searchTracks(fa.name, 0);
+      all = all.concat(list.slice(0, 4));
+    } catch {}
+  }
+  all = all.slice(0, 16);
+  if (!all.length){ box.innerHTML = ''; return; }
+  box.innerHTML = `<div class="caro"><div class="caro-h"><div class="caro-t">Новые релизы</div></div>
+    <div class="caro-row">${all.map((t, j) => `<div class="card-t" data-fi="${j}">
+      <img class="card-art" loading="lazy" decoding="async" src="${esc(t.art) || PLACEHOLDER}" onerror="this.onerror=null;this.src=PLACEHOLDER">
+      <div class="card-n">${esc(t.title)}</div><div class="card-a">${esc(t.artist)}</div></div>`).join('')}</div></div>`;
+  box.querySelector('.caro-row')._list = all;
+}
+$('#followed-releases').addEventListener('click', e => {
+  const c = e.target.closest('[data-fi]'); if (!c) return;
+  const row = c.closest('.caro-row'); const list = (row && row._list) || [];
+  const i = +c.dataset.fi;
+  haptic(0);
+  if (list[i]) playList(list, i, 'Новые релизы');
+});
 async function loadDiscover(reset){
   if (reset){ discoverState.offset = 0; discoverState.done = false; }
   discoverState.loading = true;
@@ -835,7 +944,7 @@ async function loadDiscover(reset){
     if (reset){
       discoverState.list = list;
       renderList(c, list, { rank: true });
-      if (!list.length) c.innerHTML = emptyState('Пусто', 'Попробуйте другой жанр');
+      if (!list.length) c.innerHTML = emptyState('Пусто', 'Попробуйте другой жанр', false, 'search');
     } else if (list.length){
       renderList(c, list, { append: true, rank: true });
       discoverState.list = c._list;
@@ -844,7 +953,7 @@ async function loadDiscover(reset){
     discoverState.done = list.length < 30;
   } catch (e) {
     if (reset){
-      c.innerHTML = emptyState('Не удалось загрузить', 'Проверьте подключение или API-ключ в настройках', true);
+      c.innerHTML = emptyState('Не удалось загрузить', 'Проверьте подключение или API-ключ в настройках', true, 'search');
       c._retry = () => loadDiscover(true);
     }
   }
@@ -933,7 +1042,7 @@ function renderLib(){
       <div class="t-info"><div class="t-title">${esc(p.name)}</div><div class="t-artist">${p.items.length} тр.</div></div>
     </div>`).join('');
     c.innerHTML = '<button class="chip on" id="newpl" style="margin:0 0 12px">＋ Новый плейлист</button>' + html +
-      (pls.length ? '' : emptyState('Пока пусто', 'Создайте плейлист и добавляйте треки кнопкой «+ Список» в плеере'));
+      (pls.length ? '' : emptyState('Пока пусто', 'Создайте плейлист и добавляйте треки кнопкой «+ Список» в плеере', false, 'library'));
     c._list = [];
     return;
   }
@@ -941,11 +1050,11 @@ function renderLib(){
   if (sp) renderSmartPLs();
   const list = sortLibList(libFiltered((libMode === 'likes' ? state.likes : state.history).slice()));
   renderList(c, list);
-  if (!list.length && libFilterQ) c.innerHTML = emptyState('Ничего', 'По запросу «' + libFilterQ + '» в списке нет совпадений');
+  if (!list.length && libFilterQ) c.innerHTML = emptyState('Ничего', 'По запросу «' + libFilterQ + '» в списке нет совпадений', false, 'library');
   if (!list.length && !libFilterQ){
     c.innerHTML = emptyState(
       libMode === 'likes' ? 'Пока пусто' : 'История пуста',
-      libMode === 'likes' ? 'Нажимайте на сердечко у треков — они появятся здесь' : 'Здесь появятся треки, которые вы слушали');
+      libMode === 'likes' ? 'Нажимайте на сердечко у треков — они появятся здесь' : 'Здесь появятся треки, которые вы слушали', false, 'library');
   }
 }
 function smartTopTracks(){
@@ -1026,12 +1135,25 @@ function addToPlaylistSheet(track){
 
 let curScreen = 'discover';
 const TABS = ['search', 'discover', 'library', 'settings'];
+function applyTabsVisibility(){
+  const tabs = state.tabs || {};
+  for (const s of TABS){
+    const hidden = tabs[s] === false;
+    const tab = $(`.tab[data-s="${s}"]`);
+    const scr = $('#scr-' + s);
+    if (tab) tab.style.display = hidden ? 'none' : '';
+    if (scr) scr.style.display = hidden ? 'none' : '';
+  }
+  const vtabs = visibleTabs();
+  if (vtabs.length && !vtabs.includes(curScreen)) showScreen(vtabs[0]);
+}
+function visibleTabs(){ return TABS.filter(s => state.tabs[s] !== false); }
 function showScreen(s){
   curScreen = s;
   $$('.screen').forEach(el => el.classList.toggle('active', el.id === 'scr-' + s));
   $$('.tab').forEach(b => b.classList.toggle('on', b.dataset.s === s));
   if (s === 'discover' && !discoverState.loaded){ discoverState.loaded = true; loadDiscover(true); }
-  if (s === 'discover') renderOnRepeat();
+  if (s === 'discover') { renderOnRepeat(); renderFollowedReleases(); }
   if (s === 'library') renderLib();
 }
 $$('.tab').forEach(b => b.addEventListener('click', () => { haptic(0); showScreen(b.dataset.s); }));
@@ -1042,10 +1164,11 @@ $$('.tab').forEach(b => b.addEventListener('click', () => { haptic(0); showScree
     const dx = e.changedTouches[0].clientX - sx, dy = e.changedTouches[0].clientY - sy;
     if (Math.abs(dx) < 64 || Math.abs(dx) < Math.abs(dy) * 1.4) return;
     if (e.target.closest('.caro-row, input, #seek')) return;
-    const i = TABS.indexOf(curScreen);
+    const vtabs = visibleTabs();
+    const i = vtabs.indexOf(curScreen);
     if (i < 0) return;
-    const ni = Math.max(0, Math.min(TABS.length - 1, i + (dx < 0 ? 1 : -1)));
-    if (ni !== i){ haptic(0); showScreen(TABS[ni]); }
+    const ni = Math.max(0, Math.min(vtabs.length - 1, i + (dx < 0 ? 1 : -1)));
+    if (ni !== i){ haptic(0); showScreen(vtabs[ni]); }
   }, { passive: true });
 })();
 
@@ -1249,7 +1372,7 @@ function seekFill(p){ seekEl.style.setProperty('--val', p + '%'); }
 
 function renderQueue(){
   const c = $('#qs-list');
-  if (!P.q.length){ c.innerHTML = '<div class="empty"><b>Очередь пуста</b><p>Выберите трек в поиске или обзоре</p></div>'; return; }
+  if (!P.q.length){ c.innerHTML = emptyState('Очередь пуста', 'Выберите трек в поиске или обзоре', false, 'queue'); return; }
   c.innerHTML = P.q.map((t, i) => `<div class="row-t${i === P.i ? ' playing' : ''}" data-q="${i}" data-tid="${esc(t.id)}">
       ${i === P.i ? '<span class="qnum">' + EQ + '</span>' : `<span class="qnum">${i + 1}</span>`}
       <div class="thumb"><img loading="lazy" decoding="async" src="${esc(t.art) || PLACEHOLDER}" onerror="this.onerror=null;this.src=PLACEHOLDER"></div>
@@ -1388,7 +1511,7 @@ async function shareCard(){
   $('#sh-copy').onclick = () => { navigator.clipboard && navigator.clipboard.writeText(t.title + ' — ' + t.artist); closeSheet(); toast('Скопировано'); };
 }
 $('#np-share').addEventListener('click', shareCard);
-$('#np-queue').addEventListener('click', () => openSheet('Очередь'));
+$('#np-queue').addEventListener('click', () => { openSheet('Очередь'); renderQueue(); });
 $('#qs-bd').addEventListener('click', closeSheet);
 function openSheet(title, html){
   $('#qs-title').textContent = title;
@@ -1418,16 +1541,7 @@ $('#np-vizm').addEventListener('click', () => {
   b.classList.toggle('on', state.vizMode !== 0);
   toast('Спектр: ' + VIZ_MODES[state.vizMode]);
 });
-$('#np-eq').addEventListener('click', () => {
-  const i = (EQ_ORDER.indexOf(state.eq) + 1) % EQ_ORDER.length;
-  state.eq = EQ_ORDER[i];
-  LS.set('eq', state.eq);
-  const b = $('#np-eq');
-  b.textContent = state.eq === 'flat' ? 'EQ' : state.eq[0].toUpperCase() + state.eq.slice(1);
-  b.classList.toggle('on', state.eq !== 'flat');
-  if (viz.ctx && !viz.broken && viz.eqLow){ applyEQ(state.eq); toast('EQ: ' + ({flat:'Flat',bass:'Bass',vocal:'Vocal',treble:'Treble'})[state.eq]); }
-  else toast('EQ работает при включённом визуализаторе');
-});
+$('#np-eq').addEventListener('click', () => { openEQPanel(); });
 
 let sleepMode = 0, sleepTimerT = null, sleepFadeI = null;
 function resetSleep(msg){
@@ -1474,6 +1588,61 @@ function applyEQ(name){
   if (viz.eqMid) viz.eqMid.gain.value = p.mid;
   if (viz.eqTreble) viz.eqTreble.gain.value = p.treble;
 }
+const knobToGain = v => Math.round(((v - 50) / 50) * 12 * 10) / 10;
+const gainToKnob = g => Math.max(0, Math.min(100, Math.round(50 + g / 12 * 50)));
+function applyKnobs(){
+  if (viz.eqLow) viz.eqLow.gain.value = knobToGain(state.bassKnob);
+  if (viz.eqTreble) viz.eqTreble.gain.value = knobToGain(state.trebleKnob);
+}
+function syncKnobsToPreset(name){
+  const p = EQ_PRESETS[name] || EQ_PRESETS.flat;
+  state.bassKnob = gainToKnob(p.low);
+  state.trebleKnob = gainToKnob(p.treble);
+  LS.set('bassKnob', state.bassKnob);
+  LS.set('trebleKnob', state.trebleKnob);
+}
+function openEQPanel(){
+  const active = !!(viz.ctx && !viz.broken && viz.eqLow);
+  const eqLabels = {flat:'Flat',bass:'Bass',vocal:'Vocal',treble:'Treble'};
+  openSheet('Эквалайзер',
+    `<div class="eq-presets">${EQ_ORDER.map(k => `<button class="chip${state.eq === k ? ' on' : ''}" data-eqp="${k}">${eqLabels[k]}</button>`).join('')}</div>
+    <div class="eq-knobs">
+      <label class="eq-knob">Bass<input type="range" id="eq-bass" min="0" max="100" value="${state.bassKnob}" ${active ? '' : 'disabled'}></label>
+      <label class="eq-knob">Treble<input type="range" id="eq-treble" min="0" max="100" value="${state.trebleKnob}" ${active ? '' : 'disabled'}></label>
+    </div>
+    <p class="note">${active ? 'Слайдеры меняют тембр в реальном времени. Пресеты — быстрые настройки.' : 'Включите визуализатор звука в настройках, чтобы использовать EQ-слайдеры.'}</p>`);
+  const list = $('#qs-list');
+  list.onclick = e => {
+    const b = e.target.closest('[data-eqp]'); if (!b) return;
+    state.eq = b.dataset.eqp; LS.set('eq', state.eq);
+    $$('#qs-list .eq-presets .chip').forEach(c => c.classList.toggle('on', c === b));
+    syncKnobsToPreset(state.eq);
+    const bs = $('#eq-bass'), tr = $('#eq-treble');
+    if (bs){ bs.value = state.bassKnob; bs.style.setProperty('--val', state.bassKnob + '%'); }
+    if (tr){ tr.value = state.trebleKnob; tr.style.setProperty('--val', state.trebleKnob + '%'); }
+    if (active) applyEQ(state.eq);
+    const nb = $('#np-eq');
+    nb.textContent = state.eq === 'flat' ? 'EQ' : state.eq[0].toUpperCase() + state.eq.slice(1);
+    nb.classList.toggle('on', state.eq !== 'flat');
+    haptic(0);
+  };
+  const bass = $('#eq-bass');
+  if (bass){ bass.style.setProperty('--val', state.bassKnob + '%');
+    bass.addEventListener('input', () => {
+      state.bassKnob = +bass.value; LS.set('bassKnob', state.bassKnob);
+      bass.style.setProperty('--val', state.bassKnob + '%');
+      if (viz.eqLow) viz.eqLow.gain.value = knobToGain(state.bassKnob);
+    });
+  }
+  const treble = $('#eq-treble');
+  if (treble){ treble.style.setProperty('--val', state.trebleKnob + '%');
+    treble.addEventListener('input', () => {
+      state.trebleKnob = +treble.value; LS.set('trebleKnob', state.trebleKnob);
+      treble.style.setProperty('--val', state.trebleKnob + '%');
+      if (viz.eqTreble) viz.eqTreble.gain.value = knobToGain(state.trebleKnob);
+    });
+  }
+}
 function initViz(){
   if (!state.viz || viz.ctx || viz.broken) return;
   try {
@@ -1491,6 +1660,7 @@ function initViz(){
     src.connect(viz.eqLow); viz.eqLow.connect(viz.eqMid); viz.eqMid.connect(viz.eqTreble); viz.eqTreble.connect(viz.an);
     viz.an.connect(viz.ctx.destination);
     applyEQ(state.eq);
+    applyKnobs();
     viz.ctx.resume().catch(()=>{});
   } catch { viz.broken = true; }
 }
@@ -1602,13 +1772,14 @@ async function openArtist(uid){
   openPage('Артист', skeleton(7));
   try {
     const a = await getArtist(uid);
+    const followed = isFollowed(uid);
     const head = `<div class="art-head">
         <img class="art-ava" decoding="async" src="${esc(a.art) || PLACEHOLDER}" onerror="this.onerror=null;this.src=PLACEHOLDER">
         <div style="min-width:0">
           <div class="art-name">${esc(a.name)}</div>
           <div class="art-sub">${a.followers ? a.followers.toLocaleString('ru') + ' подписчиков' : ''}</div>
         </div>
-      </div>${a.desc ? `<p class="note" style="margin:-6px 0 14px">${esc(a.desc)}</p>` : ''}`;
+      </div><button class="followbtn${followed ? ' on' : ''}" id="art-follow">${followed ? '✓ Отслеживается' : '＋ Отслеживать'}</button>${a.desc ? `<p class="note" style="margin:-6px 0 14px">${esc(a.desc)}</p>` : ''}`;
     const body = $('#page-body');
     body._list = a.tracks;
     body.innerHTML = head +
@@ -1616,6 +1787,14 @@ async function openArtist(uid){
       a.tracks.map((t, i) => trackRow(t, i, 0)).join('') || '';
     const pa = $('#pa');
     if (pa) pa.addEventListener('click', () => playList(a.tracks, 0, a.name));
+    const fb = $('#art-follow');
+    if (fb) fb.addEventListener('click', () => {
+      toggleFollow({ uid, name: a.name, art: a.art });
+      const on = isFollowed(uid);
+      fb.classList.toggle('on', on);
+      fb.textContent = on ? '✓ Отслеживается' : '＋ Отслеживать';
+      renderFollowedReleases();
+    });
     updatePlayingRows();
   } catch (e) {
     $('#page-body').innerHTML = emptyState('Не удалось загрузить', String(e.message || e));
@@ -1633,7 +1812,7 @@ async function openSCPlaylist(pid){
         <div class="pl-name">Плейлист SoundCloud</div>
         <div class="pl-sub">${list.length} треков</div>
       </div>` +
-      (list.length ? `<button class="playall" id="pa">▶ Слушать (${list.length})</button>` : emptyState('Пусто', 'В плейлисте нет доступных треков')) +
+      (list.length ? `<button class="playall" id="pa">▶ Слушать (${list.length})</button>` : emptyState('Пусто', 'В плейлисте нет доступных треков', false, 'library')) +
       list.map((t, i) => trackRow(t, i, 0)).join('');
     const pa = $('#pa');
     if (pa) pa.addEventListener('click', () => playList(list, 0, 'Плейлист'));
@@ -1648,7 +1827,7 @@ function openLocalPlaylist(pid){
   body._list = pl.items;
   openPage(pl.name,
     `<button class="playall" id="pa">▶ Слушать (${pl.items.length})</button>` +
-    (pl.items.length ? pl.items.map((t, i) => trackRow(t, i, 0)).join('') : emptyState('Пусто', 'Добавьте треки кнопкой «+ Список» в плеере')) +
+    (pl.items.length ? pl.items.map((t, i) => trackRow(t, i, 0)).join('') : emptyState('Пусто', 'Добавьте треки кнопкой «+ Список» в плеере', false, 'library')) +
     `<button class="btn danger" id="pl-del">Удалить плейлист</button>`);
   const pa = $('#pa');
   if (pa) pa.addEventListener('click', () => playList(pl.items.slice(), 0, pl.name));
@@ -1786,12 +1965,13 @@ function buildBackup(){
   return {
     v: 2, app: 'soundwave', date: new Date().toISOString(),
     likes: state.likes, playlists: state.playlists, history: state.history, stats: state.stats,
-    pinned: state.pinned,
+    pinned: state.pinned, followed: state.followed,
     settings: {
       accent: state.accent, theme: state.theme, amoled: state.amoled,
       autoRelated: state.autoRelated, fullOnly: state.fullOnly, viz: state.viz,
       vizMode: state.vizMode, eq: state.eq, shuffle: state.shuffle, repeat: state.repeat, abLoop: state.abLoop,
-      karaoke: state.karaoke
+      karaoke: state.karaoke, crossfade: state.crossfade, bassKnob: state.bassKnob,
+      trebleKnob: state.trebleKnob, tabs: state.tabs
     }
   };
 }
@@ -1837,6 +2017,7 @@ $('#imp-file').addEventListener('change', e => {
       if (Array.isArray(j.playlists)) state.playlists = j.playlists;
       if (Array.isArray(j.history)) state.history = j.history.slice(0, 100);
       if (Array.isArray(j.pinned)) state.pinned = j.pinned;
+      if (Array.isArray(j.followed)) state.followed = j.followed;
       if (j.stats) state.stats = j.stats;
       if (j.settings){
         Object.assign(state, j.settings);
@@ -1846,11 +2027,13 @@ $('#imp-file').addEventListener('change', e => {
         LS.set('vizMode', state.vizMode); LS.set('eq', state.eq);
         LS.set('shuffle', state.shuffle); LS.set('repeat', state.repeat);
         LS.set('karaoke', state.karaoke); syncKaraokeBtn();
-        applyTheme();
+        LS.set('crossfade', state.crossfade); LS.set('bassKnob', state.bassKnob);
+        LS.set('trebleKnob', state.trebleKnob); LS.set('tabs', state.tabs);
+        applyTheme(); applyTabsVisibility();
       }
       LS.set('likes', state.likes); LS.set('playlists', state.playlists);
       LS.set('history', state.history); LS.set('stats', state.stats);
-      LS.set('pinned', state.pinned);
+      LS.set('pinned', state.pinned); LS.set('followed', state.followed);
       applySettingsUI();
       if (curScreen === 'library') renderLib();
       renderRecentCaro();
@@ -2189,6 +2372,30 @@ $('#clr-likes').addEventListener('click', () => {
   const t = current(); if (t) syncHearts(t.id);
   toast('Список очищен');
 });
+const crossfadeSlider = $('#opt-crossfade');
+if (crossfadeSlider){
+  crossfadeSlider.value = state.crossfade;
+  crossfadeSlider.style.setProperty('--val', (state.crossfade / 12 * 100) + '%');
+  $('#crossfade-val').textContent = state.crossfade ? state.crossfade + 'с' : 'выкл';
+  crossfadeSlider.addEventListener('input', () => {
+    state.crossfade = +crossfadeSlider.value; LS.set('crossfade', state.crossfade);
+    crossfadeSlider.style.setProperty('--val', (state.crossfade / 12 * 100) + '%');
+    $('#crossfade-val').textContent = state.crossfade ? state.crossfade + 'с' : 'выкл';
+    if (!state.crossfade){ cancelCrossfade(); P.crossfading = false; P.crossfadeIn = false; audio.volume = 1; }
+  });
+}
+$$('.tab-toggle').forEach(cb => {
+  const s = cb.dataset.tab;
+  cb.checked = state.tabs[s] !== false;
+  cb.addEventListener('change', () => {
+    state.tabs = state.tabs || {};
+    state.tabs[s] = cb.checked;
+    LS.set('tabs', state.tabs);
+    const vis = visibleTabs();
+    if (!vis.length){ state.tabs[s] = true; cb.checked = true; LS.set('tabs', state.tabs); toast('Нельзя скрыть все вкладки'); }
+    applyTabsVisibility();
+  });
+});
 
 function watchSentinel(sentSel, rootSel, cb){
   const sent = $(sentSel), root = $(rootSel);
@@ -2363,6 +2570,8 @@ $('#onboard-skip').addEventListener('click', () => { closeOnboard(); haptic(0); 
   $('#np-vizm').classList.toggle('on', state.vizMode !== 0);
   $('#np-eq').textContent = state.eq === 'flat' ? 'EQ' : state.eq[0].toUpperCase() + state.eq.slice(1);
   $('#np-eq').classList.toggle('on', state.eq !== 'flat');
+  if (!LS.get('knobsInit', false)){ syncKnobsToPreset(state.eq); LS.set('knobsInit', true); }
+  applyTabsVisibility();
   $$('#lib-sort .chip').forEach(c => c.classList.toggle('on', c.dataset.sort === libSort));
   applyTheme();
   updateCidUI();
@@ -2377,6 +2586,7 @@ $('#onboard-skip').addEventListener('click', () => { closeOnboard(); haptic(0); 
   loadCaros();
   renderRecentCaro();
   renderOnRepeat();
+  renderFollowedReleases();
   if (!LS.get('onboarded', false)) showOnboard();
   apiGet('/search/tracks', { q: 'test', limit: 1 })
     .then(() => { cidState = 'ok'; updateCidUI(); })

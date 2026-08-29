@@ -65,7 +65,11 @@
           <p class="hint">Десятилетия</p>
           <div class="chips scrollx" id="decades"></div>
         </div>
+        <div class="surprise-wrap">
+          <button class="surprise-btn" id="surprise">🎲 Удиви меня</button>
+        </div>
         <div id="onrepeat"></div>
+        <div id="followed-releases"></div>
         <div id="recent-caro"></div>
         <div id="caros"></div>
         <div id="chart-list" class="list"></div>
@@ -142,6 +146,27 @@
           </label>
           <label class="row" style="cursor:pointer">Визуализатор звука
             <span class="switch"><input type="checkbox" id="opt-viz"><i></i></span>
+          </label>
+          <div class="row" style="justify-content:flex-start;margin-top:8px"><b>Crossfade</b></div>
+          <div class="crossfade-row">
+            <input type="range" id="opt-crossfade" min="0" max="12" step="1" value="0">
+            <span class="crossfade-val" id="crossfade-val">выкл</span>
+          </div>
+          <p class="note">Плавный переход между треками: затухание в конце + нарастание в начале. 0 = выключено.</p>
+        </div>
+        <div class="card">
+          <div class="row" style="justify-content:flex-start"><b>Вкладки</b></div>
+          <label class="row" style="cursor:pointer;margin-top:6px">Поиск
+            <span class="switch"><input type="checkbox" class="tab-toggle" data-tab="search"><i></i></span>
+          </label>
+          <label class="row" style="cursor:pointer">Обзор
+            <span class="switch"><input type="checkbox" class="tab-toggle" data-tab="discover"><i></i></span>
+          </label>
+          <label class="row" style="cursor:pointer">Библиотека
+            <span class="switch"><input type="checkbox" class="tab-toggle" data-tab="library"><i></i></span>
+          </label>
+          <label class="row" style="cursor:pointer">Ещё
+            <span class="switch"><input type="checkbox" class="tab-toggle" data-tab="settings"><i></i></span>
           </label>
         </div>
         <div class="card">
