@@ -45,7 +45,9 @@ const state = {
   theme: LS.get('theme', 'dark'),
   accent: LS.get('accent', 'orange'),
   shuffle: LS.get('shuffle', false),
-  repeat: LS.get('repeat', 'off')
+  repeat: LS.get('repeat', 'off'),
+  vizMode: LS.get('vizMode', 0),
+  eq: LS.get('eq', 'flat')
 };
 
 function applyTheme(){
@@ -823,10 +825,32 @@ function showMini(t){
   $('#mini-a').textContent = t.artist;
 }
 $('#mini').addEventListener('click', e => {
+  if (e.currentTarget._swipe) return;
   if (e.target.closest('#mini-play')){ toggle(); return; }
   if (e.target.closest('#mini-next')){ next(); return; }
   openNP();
 });
+(() => {
+  const m = $('#mini');
+  let sx = 0, sy = 0, moved = false;
+  m.addEventListener('touchstart', e => {
+    const p = e.touches[0]; sx = p.clientX; sy = p.clientY; moved = false;
+  }, { passive: true });
+  m.addEventListener('touchmove', e => {
+    const p = e.touches[0];
+    if (Math.abs(p.clientX - sx) > 10 || Math.abs(p.clientY - sy) > 10) moved = true;
+  }, { passive: true });
+  m.addEventListener('touchend', e => {
+    const p = e.changedTouches[0];
+    const dx = p.clientX - sx, dy = p.clientY - sy;
+    if (moved && Math.abs(dx) > 44 && Math.abs(dx) > Math.abs(dy) * 1.2){
+      m._swipe = true;
+      haptic(0);
+      if (dx < 0) next(); else prev();
+      setTimeout(() => { m._swipe = false; }, 500);
+    }
+  }, { passive: true });
+})();
 
 function setWebSession(t){
   if (!('mediaSession' in navigator)) return;
@@ -866,6 +890,13 @@ $('#np-prev').addEventListener('click', prev);
 $('#np-like').addEventListener('click', () => { const t = current(); if (t) toggleLike(t.id); });
 $('#np-artist').addEventListener('click', () => { const t = current(); if (t && t.uid) openArtist(t.uid); });
 $('#np-addpl').addEventListener('click', () => { const t = current(); if (t) addToPlaylistSheet(t); });
+$('#np-radio').addEventListener('click', () => {
+  state.autoRelated = !state.autoRelated;
+  LS.set('autorel', state.autoRelated);
+  $('#np-radio').classList.toggle('on', state.autoRelated);
+  const opt = $('#opt-auto'); if (opt) opt.checked = state.autoRelated;
+  toast(state.autoRelated ? 'Радио: похожие будут играть автоматически' : 'Радио выключено');
+});
 $('#np-shuffle').addEventListener('click', () => {
   state.shuffle = !state.shuffle; LS.set('shuffle', state.shuffle);
   $('#np-shuffle').classList.toggle('on', state.shuffle);
@@ -1111,6 +1142,26 @@ $('#np-speed').addEventListener('click', () => {
   toast('Скорость: ' + v + '×');
 });
 
+const VIZ_MODES = ['Бары', 'Волна', 'Круги'];
+$('#np-vizm').addEventListener('click', () => {
+  state.vizMode = (state.vizMode + 1) % 3;
+  LS.set('vizMode', state.vizMode);
+  const b = $('#np-vizm');
+  b.textContent = VIZ_MODES[state.vizMode];
+  b.classList.toggle('on', state.vizMode !== 0);
+  toast('Спектр: ' + VIZ_MODES[state.vizMode]);
+});
+$('#np-eq').addEventListener('click', () => {
+  const i = (EQ_ORDER.indexOf(state.eq) + 1) % EQ_ORDER.length;
+  state.eq = EQ_ORDER[i];
+  LS.set('eq', state.eq);
+  const b = $('#np-eq');
+  b.textContent = state.eq === 'flat' ? 'EQ' : state.eq[0].toUpperCase() + state.eq.slice(1);
+  b.classList.toggle('on', state.eq !== 'flat');
+  if (viz.ctx && !viz.broken && viz.eqLow){ applyEQ(state.eq); toast('EQ: ' + ({flat:'Flat',bass:'Bass',vocal:'Vocal',treble:'Treble'})[state.eq]); }
+  else toast('EQ работает при включённом визуализаторе');
+});
+
 let sleepMode = 0, sleepTimerT = null, sleepFadeI = null;
 function resetSleep(msg){
   clearTimeout(sleepTimerT); clearInterval(sleepFadeI);
@@ -1143,6 +1194,19 @@ $('#np-timer').addEventListener('click', () => {
 });
 
 const viz = { ctx: null, an: null, data: null, broken: false, zeroSince: 0 };
+const EQ_PRESETS = {
+  flat:   { low: 0, mid: 0, treble: 0 },
+  bass:   { low: 8, mid: -2, treble: -3 },
+  vocal:  { low: -3, mid: 5, treble: 2 },
+  treble: { low: -2, mid: 0, treble: 8 }
+};
+const EQ_ORDER = ['flat', 'bass', 'vocal', 'treble'];
+function applyEQ(name){
+  const p = EQ_PRESETS[name] || EQ_PRESETS.flat;
+  if (viz.eqLow) viz.eqLow.gain.value = p.low;
+  if (viz.eqMid) viz.eqMid.gain.value = p.mid;
+  if (viz.eqTreble) viz.eqTreble.gain.value = p.treble;
+}
 function initViz(){
   if (!state.viz || viz.ctx || viz.broken) return;
   try {
@@ -1154,7 +1218,12 @@ function initViz(){
     viz.an.fftSize = 256;
     viz.an.smoothingTimeConstant = 0.82;
     viz.data = new Uint8Array(viz.an.frequencyBinCount);
-    src.connect(viz.an); viz.an.connect(viz.ctx.destination);
+    viz.eqLow = viz.ctx.createBiquadFilter(); viz.eqLow.type = 'lowshelf'; viz.eqLow.frequency.value = 220;
+    viz.eqMid = viz.ctx.createBiquadFilter(); viz.eqMid.type = 'peaking'; viz.eqMid.frequency.value = 1000; viz.eqMid.Q.value = 1.0;
+    viz.eqTreble = viz.ctx.createBiquadFilter(); viz.eqTreble.type = 'highshelf'; viz.eqTreble.frequency.value = 4500;
+    src.connect(viz.eqLow); viz.eqLow.connect(viz.eqMid); viz.eqMid.connect(viz.eqTreble); viz.eqTreble.connect(viz.an);
+    viz.an.connect(viz.ctx.destination);
+    applyEQ(state.eq);
     viz.ctx.resume().catch(()=>{});
   } catch { viz.broken = true; }
 }
@@ -1198,6 +1267,43 @@ function drawViz(ts){
     const g = vizCtx.createLinearGradient(0, h, 0, 0);
     g.addColorStop(0, acc[1]); g.addColorStop(1, acc[0] + '66');
     vizCv._grad = g; vizCv._gradAcc = acc[0];
+  }
+  const lvl = i => {
+    if (levels) return levels[i];
+    let lv = playing ? 0.22 + 0.2 * Math.abs(Math.sin(vizPhase + i * 0.55)) : 0.06;
+    if (!playing) lv *= 0.4;
+    return lv;
+  };
+  const vmode = state.vizMode || 0;
+  if (vmode === 1){
+    vizCtx.strokeStyle = vizCv._grad;
+    vizCtx.lineWidth = Math.max(2, w / 240);
+    vizCtx.lineJoin = 'round'; vizCtx.lineCap = 'round';
+    vizCtx.beginPath();
+    for (let i = 0; i < N; i++){
+      const x = (i / (N - 1)) * w;
+      const y = h - Math.max(3, lvl(i) * h);
+      if (i) vizCtx.lineTo(x, y); else vizCtx.moveTo(x, y);
+    }
+    vizCtx.stroke();
+    return;
+  }
+  if (vmode === 2){
+    const cx = w / 2, cy = h / 2;
+    const inner = Math.max(6, Math.min(w, h) * 0.16);
+    const maxLen = Math.max(4, h * 0.42);
+    vizCtx.strokeStyle = vizCv._grad;
+    vizCtx.lineWidth = Math.max(2, (Math.PI * 2 * inner) / N * 0.55);
+    vizCtx.lineCap = 'round';
+    for (let i = 0; i < N; i++){
+      const a = (i / N) * Math.PI * 2 - Math.PI / 2;
+      const len = Math.max(2, lvl(i) * maxLen);
+      vizCtx.beginPath();
+      vizCtx.moveTo(cx + Math.cos(a) * inner, cy + Math.sin(a) * inner);
+      vizCtx.lineTo(cx + Math.cos(a) * (inner + len), cy + Math.sin(a) * (inner + len));
+      vizCtx.stroke();
+    }
+    return;
   }
   for (let i = 0; i < N; i++){
     let lv;
@@ -1602,6 +1708,11 @@ window.addEventListener('pagehide', saveSession);
   $('#np-like').innerHTML = I.heart;
   $('#np-shuffle').classList.toggle('on', state.shuffle);
   syncRepeat();
+  $('#np-radio').classList.toggle('on', state.autoRelated);
+  $('#np-vizm').textContent = VIZ_MODES[state.vizMode];
+  $('#np-vizm').classList.toggle('on', state.vizMode !== 0);
+  $('#np-eq').textContent = state.eq === 'flat' ? 'EQ' : state.eq[0].toUpperCase() + state.eq.slice(1);
+  $('#np-eq').classList.toggle('on', state.eq !== 'flat');
   applyTheme();
   updateCidUI();
   attachList($('#search-results'), 'Поиск');

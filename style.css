@@ -195,8 +195,8 @@ body.paused .np-art{transform:scale(.94)}
 .np-playbtn.busy svg{visibility:hidden}
 .np-playbtn.busy::after{content:'';width:30px;height:30px;border-radius:50%;
   border:3px solid rgba(255,255,255,.35);border-top-color:#fff;animation:spin .8s linear infinite;grid-area:1/1}
-.np-utils{display:flex;gap:10px;justify-content:center;margin:4px 0 6px;flex:none}
-.np-util{flex:1;max-width:150px;padding:10px 0;border-radius:14px;background:rgba(255,255,255,.07);
+.np-utils{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin:4px 0 6px;flex:none}
+.np-util{flex:1 1 80px;max-width:150px;padding:10px 0;border-radius:14px;background:rgba(255,255,255,.07);
   border:1px solid var(--line2);color:#f4f4f8;font-size:13px;font-weight:650;transition:transform .15s var(--spring)}
 .np-util:active{transform:scale(.95)}
 .np-util.on{background:var(--accg);border-color:var(--acc2);color:var(--acc2)}
