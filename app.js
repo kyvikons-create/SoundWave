@@ -65,7 +65,8 @@ const state = {
   followed: LS.get('followed', []),
   tabs: LS.get('tabs', {}),
   savedSearches: LS.get('savedSearches', []),
-  normalize: LS.get('normalize', false)
+  normalize: LS.get('normalize', false),
+  localTracks: []
 };
 if (state.accent === 'custom'){ ACCENTS.custom = buildCustomAccent(LS.get('accent-custom', '#ff5500')); }
 
@@ -112,7 +113,7 @@ async function probeLocal(){ try { const r = await fetch('/sc?ping=1', { cache: 
 function wrapUrl(t, url){
   if (t === 'local') return '/sc?url=' + encodeURIComponent(url);
   if (t === 'p1' || t === 'p2'){
-    if (/[?&]client_id=/.test(url) || /(api-v2\.soundcloud\.com|lrclib\.net|api\.lyrics\.ovh|genius\.com)/.test(url)) return url;
+    if (/[?&]client_id=/.test(url) || /(api-v2\.soundcloud\.com|lrclib\.net|api\.lyrics\.ovh|genius\.com|mymemory\.translated\.net)/.test(url)) return url;
     if (t === 'p1') return 'https://corsproxy.io/?url=' + encodeURIComponent(url);
     return 'https://api.allorigins.win/raw?url=' + encodeURIComponent(url);
   }
@@ -198,6 +199,23 @@ function normTrack(t){
   };
 }
 const okList = list => list.filter(x => x.ok && (!state.fullOnly || !x.snip));
+let localSeq = 0;
+function localTrackObj(lt){
+  return {
+    id: lt.id,
+    title: (lt.name || 'Локальный файл').replace(/\.[^.]+$/, ''),
+    artist: 'Локальный файл',
+    uid: 0,
+    art: '',
+    dur: lt.dur || 0,
+    ok: true,
+    snip: false,
+    link: '',
+    plays: 0,
+    localUrl: lt.url,
+    local: true
+  };
+}
 
 async function searchTracks(q, offset = 0){
   const j = await apiGet('/search/tracks', { q, limit: 30, offset });
@@ -226,6 +244,10 @@ async function getRelated(id){
   return okList((j.collection || []).map(normTrack));
 }
 async function getStreamUrl(t){
+  if (t.local){
+    if (t.localUrl) return t.localUrl;
+    throw new Error('локальный файл недоступен — переимпортируйте в «Моя музыка»');
+  }
   let trs = (t.media && t.media.transcodings) || [];
   if (!trs.length){
     const j = await apiGet(`/tracks/${t.id}`);
@@ -493,7 +515,7 @@ function saveSession(){
   const t = current(); if (!t || !P.q.length){ LS.set('session', null); return; }
   const { media, ...first } = t;
   LS.set('session', {
-    q: P.q.map(x => { const { media, ...m } = x; return m; }),
+    q: P.q.map(x => { const { media, localUrl, _by, ...m } = x; return m; }),
     i: P.i, pos: audio.currentTime || 0, src: nowSource,
     shuffle: state.shuffle, repeat: state.repeat, speed: audio.playbackRate || 1
   });
@@ -557,6 +579,7 @@ function toggleLike(id){
   if (curScreen === 'library' && libMode === 'likes') renderLib();
 }
 function pushHistory(t){
+  if (t.local) return;
   state.history = state.history.filter(x => x.id !== t.id);
   const { media, ...mini } = t;
   state.history.unshift(mini);
@@ -1019,7 +1042,8 @@ async function renderFollowedReleases(){
   const box = $('#followed-releases'); if (!box) return;
   const followed = state.followed || [];
   if (!followed.length){ box.innerHTML = ''; return; }
-  box.innerHTML = `<div class="caro"><div class="caro-h"><div class="caro-t">Новые релизы</div></div>
+  const head = '<div class="caro-h"><div class="caro-t">Новые релизы</div><button class="caro-more" data-act>Все</button></div>';
+  box.innerHTML = `<div class="caro">${head}
     <div class="caro-row">${'<div class="card-t"><div class="card-art sk"></div><div class="sk" style="height:12px;margin-top:8px"></div></div>'.repeat(4)}</div></div>`;
   let all = [];
   for (const fa of followed.slice(0, 6)){
@@ -1029,20 +1053,52 @@ async function renderFollowedReleases(){
     } catch {}
   }
   all = all.slice(0, 16);
-  if (!all.length){ box.innerHTML = ''; return; }
-  box.innerHTML = `<div class="caro"><div class="caro-h"><div class="caro-t">Новые релизы</div></div>
+  if (!all.length){ box.innerHTML = `<div class="caro">${head}<p class="note" style="padding:0 18px 14px">Не удалось получить свежие релизы — <button class="chip on" data-act style="vertical-align:baseline">открыть ленту</button></p></div>`; return; }
+  box.innerHTML = `<div class="caro">${head}
     <div class="caro-row">${all.map((t, j) => `<div class="card-t" data-fi="${j}">
       <img class="card-art" loading="lazy" decoding="async" src="${esc(t.art) || PLACEHOLDER}" onerror="this.onerror=null;this.src=PLACEHOLDER">
       <div class="card-n">${esc(t.title)}</div><div class="card-a">${esc(t.artist)}</div></div>`).join('')}</div></div>`;
   box.querySelector('.caro-row')._list = all;
 }
 $('#followed-releases').addEventListener('click', e => {
+  if (e.target.closest('[data-act]')){ openActivity(); return; }
   const c = e.target.closest('[data-fi]'); if (!c) return;
   const row = c.closest('.caro-row'); const list = (row && row._list) || [];
   const i = +c.dataset.fi;
   haptic(0);
   if (list[i]) playList(list, i, 'Новые релизы');
 });
+async function openActivity(){
+  const followed = state.followed || [];
+  if (!followed.length){
+    openPage('Активность', emptyState('Пока пусто', 'Отслеживайте артистов на их странице — здесь появится лента их свежих релизов', false, 'library'));
+    return;
+  }
+  openPage('Активность', '<div class="sk-line"></div><div class="sk-line" style="width:60%"></div>' + skeleton(5));
+  const body = $('#page-body');
+  try {
+    const seen = new Set();
+    let all = [];
+    for (const fa of followed.slice(0, 10)){
+      try {
+        const list = await searchTracks(fa.name, 0);
+        list.slice(0, 3).forEach(t => { if (!seen.has(t.id)){ seen.add(t.id); t._by = fa.name; all.push(t); } });
+      } catch {}
+    }
+    if (!all.length){ body.innerHTML = emptyState('Не удалось загрузить', 'Проверьте подключение или API-ключ', true, 'library'); body._retry = () => openActivity(); return; }
+    all = all.sort((a, b) => (b.plays || 0) - (a.plays || 0));
+    body._list = all;
+    body.innerHTML = `<button class="playall" id="pa">▶ Слушать ленту (${all.length})</button>` +
+      all.map((t, i) => trackRow(t, i, 0)).join('');
+    const pa = $('#pa');
+    if (pa) pa.addEventListener('click', () => playList(all.slice(), 0, 'Активность'));
+    updatePlayingRows();
+  } catch (e) {
+    body.innerHTML = emptyState('Не удалось загрузить', String(e.message || e), true, 'library');
+    body._retry = () => openActivity();
+  }
+}
+window.__swOpenActivity = openActivity;
 async function loadDiscover(reset){
   if (reset){ discoverState.offset = 0; discoverState.done = false; }
   discoverState.loading = true;
@@ -1089,8 +1145,8 @@ $('#lib-seg').addEventListener('click', e => {
   const b = e.target.closest('button'); if (!b) return;
   libMode = b.dataset.v;
   $$('#lib-seg button').forEach(x => x.classList.toggle('on', x === b));
-  $('#lib-filter').hidden = libMode === 'playlists';
-  $('#lib-sort').hidden = libMode === 'playlists';
+  $('#lib-filter').hidden = libMode === 'playlists' || libMode === 'mymusic';
+  $('#lib-sort').hidden = libMode === 'playlists' || libMode === 'mymusic';
   renderLib();
 });
 $('#lib-sort').addEventListener('click', e => {
@@ -1140,6 +1196,18 @@ function sortLibList(list){
 function renderLib(){
   const c = $('#lib-list');
   const sp = $('#smart-pls');
+  if (libMode === 'mymusic'){
+    $('#lib-sort').hidden = true;
+    if (sp) sp.hidden = true;
+    const list = state.localTracks.map(localTrackObj);
+    if (!list.length){
+      c.innerHTML = emptyState('Пока пусто', 'Импортируйте свои аудиофайлы в «Ещё» → «Моя музыка» — они появятся здесь', false, 'library');
+      c._list = [];
+      return;
+    }
+    renderList(c, list);
+    return;
+  }
   if (libMode === 'playlists'){
     $('#lib-sort').hidden = true;
     if (sp) sp.hidden = true;
@@ -1958,11 +2026,15 @@ function openLocalPlaylist(pid){
   const body = $('#page-body');
   body._list = pl.items;
   openPage(pl.name,
-    `<button class="playall" id="pa">▶ Слушать (${pl.items.length})</button>` +
+    `<div class="btnrow" style="margin-bottom:12px">
+       <button class="playall" id="pa" style="flex:1">▶ Слушать (${pl.items.length})</button>
+       <button class="btn" id="pl-share" style="flex:none">Поделиться</button>
+     </div>` +
     (pl.items.length ? pl.items.map((t, i) => trackRow(t, i, 0)).join('') : emptyState('Пусто', 'Добавьте треки кнопкой «+ Список» в плеере', false, 'library')) +
     `<button class="btn danger" id="pl-del">Удалить плейлист</button>`);
   const pa = $('#pa');
   if (pa) pa.addEventListener('click', () => playList(pl.items.slice(), 0, pl.name));
+  $('#pl-share').addEventListener('click', () => sharePlaylist(pl));
   $('#pl-del').addEventListener('click', () => {
     state.playlists = state.playlists.filter(p => p.id !== pid);
     LS.set('playlists', state.playlists);
@@ -1970,9 +2042,81 @@ function openLocalPlaylist(pid){
   });
   updatePlayingRows();
 }
+function b64encUtf8(str){
+  const bytes = new TextEncoder().encode(str);
+  let bin = '';
+  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+  return btoa(bin);
+}
+function b64decUtf8(b64){
+  let bin;
+  try { bin = atob(b64); } catch { return null; }
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return new TextDecoder().decode(bytes);
+}
+function sharePlaylist(pl){
+  const payload = {
+    name: pl.name,
+    tracks: (pl.items || []).map(t => ({ id: t.id, title: t.title, artist: t.artist, art: t.art, dur: t.dur }))
+  };
+  let b64;
+  try { b64 = b64encUtf8(JSON.stringify(payload)); }
+  catch { toast('Не удалось создать ссылку'); return; }
+  const url = location.origin + location.pathname + '?pl=' + encodeURIComponent(b64);
+  if (navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(url).then(
+      () => toast('Ссылка скопирована'),
+      () => openShareSheet(url)
+    );
+  } else {
+    openShareSheet(url);
+  }
+}
+function openShareSheet(url){
+  openSheet('Поделиться плейлистом',
+    `<div class="field"><textarea id="pl-share-ta" readonly>${esc(url)}</textarea></div>
+     <div class="btnrow"><button class="btn" id="pl-share-copy">Скопировать</button></div>
+     ${navigator.share ? '<button class="btn" id="pl-share-native" style="margin-top:8px;width:100%">Поделиться</button>' : ''}`);
+  const ta = $('#pl-share-ta'); if (ta) ta.addEventListener('focus', e => e.target.select());
+  const c = $('#pl-share-copy');
+  if (c) c.onclick = () => { navigator.clipboard && navigator.clipboard.writeText(url); closeSheet(); toast('Скопировано'); };
+  const n = $('#pl-share-native');
+  if (n) n.onclick = () => navigator.share({ title: 'Плейлист SoundWave', url }).catch(() => {});
+}
+async function checkSharedPlaylist(){
+  const m = location.search.match(/[?&]pl=([^&]+)/);
+  if (!m) return;
+  let raw;
+  try { raw = decodeURIComponent(m[1]); } catch { raw = m[1]; }
+  const json = b64decUtf8(raw);
+  if (!json) return;
+  let payload;
+  try { payload = JSON.parse(json); } catch { return; }
+  if (!payload || !payload.name || !Array.isArray(payload.tracks)) return;
+  const name = String(payload.name).slice(0, 40);
+  const count = payload.tracks.length;
+  openSheet('Импорт плейлиста',
+    `<div class="row-t" style="pointer-events:none;background:var(--card2);margin-bottom:6px">
+       <div class="t-info"><div class="t-title">${esc(name)}</div><div class="t-artist">${count} треков</div></div>
+     </div>
+     <p class="note">Ссылка содержит плейлист SoundWave. Импортируйте его в свою библиотеку — треки подгрузятся с SoundCloud при воспроизведении.</p>
+     <div class="btnrow"><button class="btn" id="pl-import">Импортировать</button></div>`);
+  $('#pl-import').onclick = () => {
+    const items = payload.tracks.map(t => ({
+      id: t.id, title: t.title || 'Без названия', artist: t.artist || '',
+      art: t.art || '', dur: t.dur || 0, ok: true, snip: false, plays: 0
+    }));
+    state.playlists.unshift({ id: Date.now(), name: name, items: items });
+    LS.set('playlists', state.playlists);
+    closeSheet(); toast('Плейлист импортирован');
+    try { history.replaceState(null, '', location.pathname); } catch {}
+    if (curScreen === 'library'){ libMode = 'playlists'; $$('#lib-seg button').forEach(x => x.classList.toggle('on', x.dataset.v === 'playlists')); $('#lib-filter').hidden = true; $('#lib-sort').hidden = true; renderLib(); }
+  };
+}
 $('#page-body').addEventListener('click', e => {
   if (e.target.closest('[data-uid]')){ openArtist(+e.target.closest('[data-uid]').dataset.uid); return; }
-  if (e.target.closest('#pa') || e.target.closest('#pl-del')) return;
+  if (e.target.closest('#pa') || e.target.closest('#pl-del') || e.target.closest('#pl-share') || e.target.closest('#st-share')) return;
   const h = e.target.closest('[data-like]');
   if (h){ toggleLike(+h.dataset.like); return; }
   const r = e.target.closest('.row-t'); if (!r) return;
@@ -2147,9 +2291,113 @@ function openStats(){
     <div class="card">
       <div class="row" style="justify-content:flex-start"><b>Жанры</b></div>
       ${genreDonutHTML()}
-    </div>`);
+    </div>
+    <button class="btn" id="st-share" style="margin-top:4px;width:100%">📤 Поделиться статистикой</button>`);
+  const stShare = $('#st-share');
+  if (stShare) stShare.addEventListener('click', () => shareStatsCard());
 }
 $('#open-stats').addEventListener('click', openStats);
+
+async function shareStatsCard(){
+  const s = state.stats || {sec:0, art:{}, day:{}, trk:{}};
+  const acc = ACCENTS[state.accent] || ACCENTS.orange;
+  const W = 1080, H = 1350;
+  const cv = document.createElement('canvas');
+  cv.width = W; cv.height = H;
+  const x = cv.getContext('2d');
+  try {
+    x.fillStyle = state.amoled ? '#000' : '#08080d';
+    x.fillRect(0, 0, W, H);
+    const g = x.createLinearGradient(0, 0, W, H);
+    g.addColorStop(0, acc[0]); g.addColorStop(1, acc[1]);
+    x.fillStyle = g;
+    x.font = '900 92px -apple-system, sans-serif';
+    x.fillText('SoundWave', 70, 170);
+    x.fillStyle = '#8e8ea3';
+    x.font = '600 36px -apple-system, sans-serif';
+    x.fillText('Моя статистика', 70, 220);
+    const totalMin = Math.round((s.sec || 0) / 60);
+    const hh = Math.floor(totalMin / 60), mm = totalMin % 60;
+    const arts = Object.entries(s.art || {}).sort((a, b) => b[1] - a[1]);
+    const topArtist = arts[0] ? arts[0][0] : '—';
+    const trks = s.trk ? Object.values(s.trk).filter(v => v && v.s).sort((a, b) => b.s - a.s) : [];
+    const topTrack = trks[0];
+    const tiles = [
+      { v: hh + 'ч ' + mm + 'м', l: 'слушали' },
+      { v: String(s.tracks || 0), l: 'воспроизведений' },
+      { v: String(state.likes.length), l: 'в любимых' },
+      { v: String(arts.length), l: 'артистов' }
+    ];
+    const tw = (W - 70 * 3) / 2, th = 200, ty = 280;
+    tiles.forEach((t, i) => {
+      const col = i % 2, row = Math.floor(i / 2);
+      const tx = 70 + col * (tw + 70);
+      const yy = ty + row * (th + 28);
+      x.fillStyle = '#1d1d2b';
+      roundRect(x, tx, yy, tw, th, 36); x.fill();
+      x.fillStyle = g;
+      x.font = '900 60px -apple-system, sans-serif';
+      x.fillText(t.v, tx + 36, yy + 80);
+      x.fillStyle = '#8e8ea3';
+      x.font = '600 30px -apple-system, sans-serif';
+      x.fillText(t.l, tx + 36, yy + 130);
+    });
+    let yy = ty + 2 * (th + 28) + 30;
+    x.fillStyle = '#f5f5f7';
+    x.font = '700 38px -apple-system, sans-serif';
+    x.fillText('Топ-артист', 70, yy);
+    x.fillStyle = g;
+    x.font = '800 56px -apple-system, sans-serif';
+    x.fillText(String(topArtist).slice(0, 22), 70, yy + 64);
+    yy += 64 + 60;
+    x.fillStyle = '#f5f5f7';
+    x.font = '700 38px -apple-system, sans-serif';
+    x.fillText('Топ-трек', 70, yy);
+    if (topTrack){
+      x.fillStyle = g;
+      x.font = '800 50px -apple-system, sans-serif';
+      const tl = String(topTrack.t).match(/.{1,24}(\s|$)/g) || [String(topTrack.t)];
+      tl.slice(0, 2).forEach((l, i) => x.fillText(l.trim(), 70, yy + 58 + i * 62));
+      x.fillStyle = '#8e8ea3';
+      x.font = '600 36px -apple-system, sans-serif';
+      x.fillText(String(topTrack.a).slice(0, 26), 70, yy + 58 + Math.min(2, tl.length) * 62 + 10);
+    } else {
+      x.fillStyle = '#8e8ea3';
+      x.font = '600 36px -apple-system, sans-serif';
+      x.fillText('Послушайте любимое — топ-трек появится здесь', 70, yy + 58);
+    }
+    yy = H - 130;
+    x.fillStyle = '#f5f5f7';
+    x.font = '700 38px -apple-system, sans-serif';
+    x.fillText('Достижения', 70, yy);
+    const badges = statsBadges(s);
+    x.font = '900 64px -apple-system, sans-serif';
+    let bx = 70;
+    badges.forEach(b => {
+      x.globalAlpha = b.ok ? 1 : 0.35;
+      x.fillText(b.ic, bx, yy + 80);
+      bx += 110;
+      x.globalAlpha = 1;
+    });
+  } catch {}
+  function roundRect(cx, px, py, w, h, r){
+    cx.beginPath();
+    cx.moveTo(px + r, py); cx.arcTo(px + w, py, px + w, py + h, r); cx.arcTo(px + w, py + h, px, py + h, r);
+    cx.arcTo(px, py + h, px, py, r); cx.arcTo(px, py, px + w, py, r); cx.closePath();
+  }
+  cv.toBlob ? cv.toBlob(doShare, 'image/png') : doShareBlobFallback(cv);
+  function doShare(blob){
+    if (navigator.canShare && navigator.canShare({ files: [new File([blob], 'soundwave-stats.png', { type: 'image/png' })] })){
+      const file = new File([blob], 'soundwave-stats.png', { type: 'image/png' });
+      navigator.share({ title: 'Моя статистика SoundWave', files: [file] }).catch(() => downloadBlob(blob));
+    } else {
+      downloadBlob(blob);
+    }
+  }
+  function doShareBlobFallback(cv2){ try { const url = cv2.toDataURL('image/png'); downloadDataUrl(url); } catch { toast('Не удалось создать карточку'); } }
+  function downloadDataUrl(url){ const a = document.createElement('a'); a.href = url; a.download = 'soundwave-stats.png'; document.body.appendChild(a); a.click(); a.remove(); toast('Статистика сохранена'); }
+  function downloadBlob(blob){ const url = URL.createObjectURL(blob); downloadDataUrl(url); setTimeout(() => URL.revokeObjectURL(url), 1500); }
+}
 
 function buildBackup(){
   return {
@@ -2237,6 +2485,26 @@ $('#imp-file').addEventListener('change', e => {
   };
   reader.onerror = () => toast('Не удалось прочитать файл');
   reader.readAsText(f);
+});
+
+$('#music-import').addEventListener('click', () => { const mf = $('#music-file'); if (!mf) return; mf.value = ''; mf.click(); });
+$('#music-clear').addEventListener('click', () => {
+  if (!state.localTracks.length){ toast('Локальная музыка уже пуста'); return; }
+  for (const lt of state.localTracks){ try { URL.revokeObjectURL(lt.url); } catch {} }
+  state.localTracks = [];
+  if (curScreen === 'library' && libMode === 'mymusic') renderLib();
+  toast('Локальная музыка очищена');
+});
+$('#music-file').addEventListener('change', e => {
+  const files = e.target.files; if (!files || !files.length) return;
+  let added = 0;
+  for (const f of files){
+    const url = URL.createObjectURL(f);
+    state.localTracks.push({ id: 'local-' + Date.now() + '-' + (localSeq++), name: f.name, file: f.name, url: url });
+    added++;
+  }
+  toast('Добавлено: ' + added);
+  if (curScreen === 'library' && libMode === 'mymusic') renderLib();
 });
 
 const lyrCache = {};
@@ -2331,10 +2599,14 @@ async function fetchLyrics(track){
   return res;
 }
 let lyrLines = [], lyrActive = -1, lyrOpenTrack = 0, lyrEditing = false;
+let lyrCurrent = null, lyrTranslate = false, lyrTrLines = [], lyrTranslating = false;
 const karaBtn = $('#lyr-kara');
+const trBtn = $('#lyr-tr');
 function resetLyrics(){
   lyrLines = []; lyrActive = -1; lyrOpenTrack = 0; lyrEditing = false;
+  lyrCurrent = null; lyrTranslate = false; lyrTrLines = []; lyrTranslating = false;
   if (karaBtn){ karaBtn.hidden = true; karaBtn.classList.remove('on'); }
+  if (trBtn){ trBtn.classList.remove('on'); trBtn.setAttribute('aria-pressed', 'false'); trBtn.hidden = true; }
 }
 function syncKaraokeBtn(){
   if (!karaBtn) return;
@@ -2349,7 +2621,8 @@ function buildKaraokeLine(lineEl, i){
 function clearKaraokeLine(lineEl){
   if (lineEl && lineEl.dataset.kw){
     const li = lineEl.dataset.li;
-    lineEl.innerHTML = esc(lyrLines[+li] ? lyrLines[+li].text : lineEl.textContent);
+    const tr = (lyrTranslate && lyrTrLines[+li]) ? '<div class="lyr-tr">' + esc(lyrTrLines[+li]) + '</div>' : '';
+    lineEl.innerHTML = esc(lyrLines[+li] ? lyrLines[+li].text : lineEl.textContent) + tr;
     delete lineEl.dataset.kw;
   }
 }
@@ -2359,6 +2632,11 @@ if (karaBtn){
     state.karaoke = !state.karaoke;
     LS.set('karaoke', state.karaoke);
     syncKaraokeBtn();
+    if (state.karaoke && lyrTranslate){
+      lyrTranslate = false; lyrTrLines = [];
+      if (trBtn){ trBtn.classList.remove('on'); trBtn.setAttribute('aria-pressed', 'false'); }
+      renderLyricsBody();
+    }
     if (!state.karaoke){
       const lines = $('#lyr-body').children;
       for (let i = 0; i < lines.length; i++) clearKaraokeLine(lines[i]);
@@ -2369,6 +2647,30 @@ if (karaBtn){
     haptic(0);
   });
 }
+function lyrLineTr(i){
+  return (lyrTranslate && lyrTrLines[i]) ? '<div class="lyr-tr">' + esc(lyrTrLines[i]) + '</div>' : '';
+}
+function renderLyricsBody(){
+  const body = $('#lyr-body');
+  const lrc = lyrCurrent;
+  if (!lrc) return;
+  if (lrc.synced){
+    lyrLines = parseLRC(lrc.synced);
+    body.innerHTML = lyrLines.map((l, i) => `<div class="lyr-line" data-lt="${l.t}" data-li="${i}">${esc(l.text)}${lyrLineTr(i)}</div>`).join('');
+    if (karaBtn){ karaBtn.hidden = false; syncKaraokeBtn(); }
+    if (trBtn){ trBtn.hidden = false; }
+  } else if (lrc.plain){
+    lyrLines = [];
+    if (karaBtn) karaBtn.hidden = true;
+    if (trBtn){ trBtn.hidden = false; }
+    const ls = lrc.plain.split('\n');
+    body.innerHTML = ls.map((line, i) => `<div class="lyr-line${line.trim() ? '' : ' past'}" style="pointer-events:none">${esc(line) || '&nbsp;'}${lyrLineTr(i)}</div>`).join('');
+  } else {
+    if (karaBtn) karaBtn.hidden = true;
+    if (trBtn){ trBtn.hidden = true; }
+    body.innerHTML = '<div class="lyr-msg">Текст не найден.<br>База лирики покрывает не все треки — попробуйте поискать вручную или послушать что-то ещё 🎧</div>';
+  }
+}
 $('#np-lyrics').addEventListener('click', async () => {
   const t = current(); if (!t) return;
   $('#lyr-t').textContent = t.title;
@@ -2376,23 +2678,92 @@ $('#np-lyrics').addEventListener('click', async () => {
   $('#lyr-body').innerHTML = Array.from({length: 10}, () => '<div class="sk-line"></div>').join('');
   $('#lyr').classList.add('open');
   lyrOpenTrack = t.id;
+  lyrCurrent = null; lyrTranslate = false; lyrTrLines = [];
+  if (trBtn){ trBtn.classList.remove('on'); trBtn.setAttribute('aria-pressed', 'false'); trBtn.hidden = true; }
   const lrc = await fetchLyrics(t);
   if (lyrOpenTrack !== t.id) return;
-  const body = $('#lyr-body');
-  if (lrc.synced){
-    lyrLines = parseLRC(lrc.synced);
-    body.innerHTML = lyrLines.map((l, i) => `<div class="lyr-line" data-lt="${l.t}" data-li="${i}">${esc(l.text)}</div>`).join('');
-    if (karaBtn){ karaBtn.hidden = false; syncKaraokeBtn(); }
-  } else if (lrc.plain){
-    lyrLines = [];
-    if (karaBtn) karaBtn.hidden = true;
-    body.innerHTML = lrc.plain.split('\n').map(line => `<div class="lyr-line${line.trim() ? '' : ' past'}" style="pointer-events:none">${esc(line) || '&nbsp;'}</div>`).join('');
-  } else {
-    if (karaBtn) karaBtn.hidden = true;
-    body.innerHTML = '<div class="lyr-msg">Текст не найден.<br>База лирики покрывает не все треки — попробуйте поискать вручную или послушать что-то ещё 🎧</div>';
-  }
+  lyrCurrent = lrc;
+  renderLyricsBody();
 });
 $('#lyr-x').addEventListener('click', () => $('#lyr').classList.remove('open'));
+function isLikelyEnglish(text){
+  const t = String(text || '');
+  if (/[а-яё]/i.test(t)) return false;
+  const letters = (t.match(/[a-z]/gi) || []).length;
+  const alnum = (t.match(/[a-z0-9]/gi) || []).length;
+  if (alnum < 12) return false;
+  return letters / alnum > 0.5;
+}
+function collectLyricsText(){
+  if (!lyrCurrent) return { text: '', lines: [] };
+  if (lyrCurrent.synced){
+    const arr = parseLRC(lyrCurrent.synced);
+    return { text: arr.map(l => l.text).join('\n'), lines: arr.map(l => l.text) };
+  }
+  if (lyrCurrent.plain){
+    const arr = lyrCurrent.plain.split('\n');
+    return { text: arr.join('\n'), lines: arr };
+  }
+  return { text: '', lines: [] };
+}
+async function translateLyrics(text){
+  const lines = text.split('\n');
+  const chunks = [];
+  let cur = '';
+  for (const ln of lines){
+    const add = (cur ? cur + '\n' : '') + ln;
+    if (add.length > 450){ if (cur) chunks.push(cur); cur = ln; }
+    else cur = add;
+  }
+  if (cur) chunks.push(cur);
+  const out = [];
+  for (const ch of chunks){
+    const r = await rawFetch('https://api.mymemory.translated.net/get?q=' + encodeURIComponent(ch) + '&langpair=en|ru');
+    if (!r.ok) throw new Error('translate HTTP ' + r.status);
+    const j = await r.json();
+    const t = j && j.responseData && j.responseData.translatedText;
+    if (!t) throw new Error('no translation');
+    out.push(t);
+  }
+  return out.join('\n');
+}
+if (trBtn){
+  trBtn.addEventListener('click', async () => {
+    if (!lyrCurrent){ toast('Сначала откройте текст'); return; }
+    if (lyrTranslating){ toast('Переводим…'); return; }
+    if (!lyrTranslate){
+      const col = collectLyricsText();
+      if (!col.text.trim()){ toast('Нечего переводить'); return; }
+      if (!isLikelyEnglish(col.text)){ toast('Перевод доступен только для англоязычных текстов'); return; }
+      if (state.karaoke){
+        state.karaoke = false; LS.set('karaoke', false); syncKaraokeBtn();
+      }
+      lyrTranslating = true;
+      trBtn.classList.add('busy');
+      try {
+        const translated = await translateLyrics(col.text);
+        const trArr = translated.split('\n');
+        lyrTrLines = trArr.length === col.lines.length ? trArr : col.lines.map((_, i) => trArr.join(' '));
+        lyrTranslate = true;
+        trBtn.classList.add('on');
+        trBtn.setAttribute('aria-pressed', 'true');
+        renderLyricsBody();
+        toast('Перевод готов');
+      } catch (e){
+        toast('Перевод недоступен');
+      } finally {
+        lyrTranslating = false;
+        trBtn.classList.remove('busy');
+      }
+    } else {
+      lyrTranslate = false; lyrTrLines = [];
+      trBtn.classList.remove('on');
+      trBtn.setAttribute('aria-pressed', 'false');
+      renderLyricsBody();
+    }
+    haptic(0);
+  });
+}
 $('#lyr-body').addEventListener('click', e => {
   const ln = e.target.closest('[data-lt]'); if (!ln) return;
   audio.currentTime = +ln.dataset.lt; nativeNP();
@@ -2404,7 +2775,7 @@ function updateLyrics(){
   let idx = -1;
   for (let i = 0; i < lyrLines.length; i++){ if (lyrLines[i].t <= ct) idx = i; else break; }
   const lines = $('#lyr-body').children;
-  if (state.karaoke && idx >= 0 && lines[idx]){
+  if (state.karaoke && !lyrTranslate && idx >= 0 && lines[idx]){
     const el = lines[idx];
     if (idx !== lyrActive || !el.dataset.kw) buildKaraokeLine(el, idx);
     const n = +(el.dataset.kw || 0);
@@ -2615,6 +2986,7 @@ const PALETTE_ACTIONS = [
   { id: 'home', label: 'Главная', ic: '🏠', run: () => showScreen('discover') },
   { id: 'library', label: 'Библиотека', ic: '📚', run: () => showScreen('library') },
   { id: 'stats', label: 'Статистика', ic: '📊', run: () => openStats() },
+  { id: 'activity', label: 'Активность артистов', ic: '📣', run: () => openActivity() },
   { id: 'theme', label: 'Переключить тему', ic: '🌗', run: () => {
     state.theme = state.theme === 'light' ? 'dark' : 'light';
     LS.set('theme', state.theme); applyTheme();
@@ -2789,6 +3161,7 @@ $('#onboard-skip').addEventListener('click', () => { closeOnboard(); haptic(0); 
   renderDailyMixes();
   renderOnRepeat();
   renderFollowedReleases();
+  checkSharedPlaylist();
   if (!LS.get('onboarded', false)) showOnboard();
   apiGet('/search/tracks', { q: 'test', limit: 1 })
     .then(() => { cidState = 'ok'; updateCidUI(); })

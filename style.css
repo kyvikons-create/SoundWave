@@ -465,6 +465,14 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;background
 .lyr-kara{padding:6px 13px;border-radius:16px;background:rgba(255,255,255,.09);color:rgba(255,255,255,.7);font-size:12px;font-weight:700;border:1px solid var(--line2);flex:none;transition:transform .15s var(--spring)}
 .lyr-kara:active{transform:scale(.92)}
 .lyr-kara.on{background:var(--accg);border-color:var(--acc2);color:var(--acc2)}
+.lyr-tr-btn{padding:6px 13px;border-radius:16px;background:rgba(255,255,255,.09);color:rgba(255,255,255,.7);font-size:12px;font-weight:700;border:1px solid var(--line2);flex:none;transition:transform .15s var(--spring)}
+.lyr-tr-btn:active{transform:scale(.92)}
+.lyr-tr-btn.on{background:var(--accg);border-color:var(--acc2);color:var(--acc2)}
+.lyr-tr-btn.busy{opacity:.55}
+.lyr-tr{font-size:13.5px;font-weight:500;color:var(--t2);line-height:1.45;margin-top:3px;padding:0 0 2px;font-style:italic}
+.lyr-line.past .lyr-tr{opacity:.7}
+.caro-more{font-size:13px;font-weight:700;color:var(--acc2);background:var(--accg);border:1px solid var(--acc2);padding:6px 14px;border-radius:18px;flex:none}
+.caro-more:active{transform:scale(.92)}
 .lyr-line .kw-w{transition:color .12s}
 .lyr-line.on .kw-w.kw{color:var(--acc2);font-weight:800;text-shadow:0 0 20px var(--accg)}
 
@@ -475,7 +483,9 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;background
 html[data-theme="light"] .mood-chip,
 html[data-theme="light"] .smart-card,
 html[data-theme="light"] .achv{background:var(--card2)}
-html[data-theme="light"] .lyr-kara{background:rgba(0,0,0,.06);color:rgba(0,0,0,.7)}
+html[data-theme="light"] .lyr-kara,
+html[data-theme="light"] .lyr-tr-btn{background:rgba(0,0,0,.06);color:rgba(0,0,0,.7)}
+html[data-theme="light"] .lyr-tr{color:var(--t2)}
 html[data-theme="light"] .row-t.pinned{background:var(--accg)}
 
 .mood-chip{font-size:calc(13px * var(--fs,1))}
@@ -487,6 +497,9 @@ html[data-theme="light"] .row-t.pinned{background:var(--accg)}
 .donut-hole b{font-size:calc(22px * var(--fs,1))}
 .donut-hole span{font-size:calc(11px * var(--fs,1))}
 .lyr-kara{font-size:calc(12px * var(--fs,1))}
+.lyr-tr-btn{font-size:calc(12px * var(--fs,1))}
+.lyr-tr{font-size:calc(13.5px * var(--fs,1))}
+.caro-more{font-size:calc(13px * var(--fs,1))}
 
 /* ===== Wave 5: decades / on-repeat / lyrics-edit / palette / onboard ===== */
 .decades-wrap{margin:0 -18px 22px;padding:0 18px}
