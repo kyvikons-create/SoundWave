@@ -113,6 +113,16 @@
           </label>
         </div>
         <div class="card">
+          <div class="row" style="justify-content:flex-start"><b>Размер шрифта</b></div>
+          <div class="seg" id="font-seg" style="margin-top:10px">
+            <button data-fs="0.9">S</button>
+            <button data-fs="1" class="on">M</button>
+            <button data-fs="1.12">L</button>
+            <button data-fs="1.26">XL</button>
+          </div>
+          <p class="note">Масштаб текста интерфейса. Применяется сразу и сохраняется.</p>
+        </div>
+        <div class="card">
           <div class="row" style="justify-content:flex-start"><b>Воспроизведение</b></div>
           <label class="row" style="cursor:pointer;margin-top:6px">Автоплей похожих
             <span class="switch"><input type="checkbox" id="opt-auto"><i></i></span>
@@ -139,10 +149,12 @@
         </div>
         <div class="card">
           <div class="row" style="justify-content:flex-start"><b>Данные</b></div>
+          <p class="note">Экспорт сохраняет любимые, историю, плейлисты, статистику и настройки в файл <code>soundwave-backup.json</code>. Импорт восстанавливает из файла.</p>
           <div class="btnrow">
             <button class="btn" id="data-export">Экспорт</button>
             <button class="btn" id="data-import">Импорт</button>
           </div>
+          <input type="file" id="imp-file" accept="application/json,.json" hidden>
           <button class="btn danger" id="clr-hist">Очистить историю</button>
           <button class="btn danger" id="clr-likes">Удалить все любимые</button>
         </div>

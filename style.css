@@ -14,7 +14,9 @@
   --sb:env(safe-area-inset-bottom,0px);--st:env(safe-area-inset-top,0px);
   --shadow:0 20px 60px rgba(0,0,0,.55);
   --wave:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 128 10'%3E%3Cpath d='M0 5 Q8 0 16 5 T32 5 T48 5 T64 5 T80 5 T96 5 T112 5 T128 5' fill='none' stroke='%23ff5500' stroke-width='2.2' stroke-linecap='round'/%3E%3C/svg%3E");
+  --fs:1;
 }
+html{font-size:calc(16px * var(--fs,1))}
 html.amoled{--bg:#000;--bg2:#060609;--card:#0a0a10;--card2:#101016;--card3:#16161e;--line:rgba(255,255,255,.05);--line2:rgba(255,255,255,.03)}
 
 html,body{height:100%}
@@ -390,3 +392,38 @@ html[data-theme="light"] .share-ph{background:#e8e8ee}
 .hist-head .hint{margin-bottom:0}
 .hist-clear{font-size:12px;font-weight:650;color:var(--t2);padding:4px 10px;border-radius:10px;background:var(--card2);border:1px solid var(--line2)}
 .hist-clear:active{transform:scale(.95)}
+
+/* ===== Font scale (var(--fs)) — additive overrides, identity at --fs:1 ===== */
+.t-title{font-size:calc(15.5px * var(--fs,1))}
+.t-artist{font-size:calc(13px * var(--fs,1))}
+.np-title{font-size:calc(23px * var(--fs,1))}
+.np-artist{font-size:calc(17px * var(--fs,1))}
+.ltitle{font-size:calc(30px * var(--fs,1))}
+.hero-s{font-size:calc(14px * var(--fs,1))}
+.chip{font-size:calc(13px * var(--fs,1))}
+.seg button{font-size:calc(14px * var(--fs,1))}
+.btn{font-size:calc(14px * var(--fs,1))}
+.tab span{font-size:calc(10.5px * var(--fs,1))}
+.mini-t{font-size:calc(14.5px * var(--fs,1))}
+.mini-a{font-size:calc(12px * var(--fs,1))}
+.caro-t{font-size:calc(21px * var(--fs,1))}
+.card-n{font-size:calc(13.5px * var(--fs,1))}
+.card-a{font-size:calc(12px * var(--fs,1))}
+.stat-num{font-size:calc(30px * var(--fs,1))}
+.stat-lbl{font-size:calc(12px * var(--fs,1))}
+.hint{font-size:calc(12.5px * var(--fs,1))}
+.note{font-size:calc(12.5px * var(--fs,1))}
+.row{font-size:calc(15px * var(--fs,1))}
+.searchbar input{font-size:calc(16px * var(--fs,1))}
+.t-dur,.rank,.qnum{font-size:calc(12px * var(--fs,1))}
+.badge{font-size:calc(12px * var(--fs,1))}
+
+/* ===== Stats heatmap ===== */
+.stat-heat{display:flex;gap:6px;height:92px;align-items:flex-end;margin-top:12px}
+.heat-cell{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;gap:5px}
+.heat-bar{width:100%;max-width:30px;background:var(--grad);border-radius:7px;min-height:6px;transition:height .3s}
+.heat-lbl{font-size:calc(10px * var(--fs,1));color:var(--t2);font-weight:600}
+.heat-cell.today .heat-lbl{color:var(--acc2)}
+.stat-sub{font-size:calc(12px * var(--fs,1));color:var(--t2);margin-top:3px}
+.stat-rank{color:var(--acc2);font-weight:800;margin-right:5px}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;background:var(--card2);padding:1px 5px;border-radius:5px;font-size:.92em}

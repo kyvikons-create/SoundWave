@@ -461,6 +461,11 @@ function flushStats(){
   const today = new Date().toISOString().slice(0, 10);
   state.stats.day[today] = (state.stats.day[today] || 0) + add;
   state.stats.tracks = (state.stats.tracks || 0) + 1;
+  state.stats.trk = state.stats.trk || {};
+  let tk = state.stats.trk[t.id];
+  if (!tk){ tk = state.stats.trk[t.id] = { t: t.title, a: t.artist, s: 0 }; }
+  else { tk.t = t.title; tk.a = t.artist; }
+  tk.s += add;
   LS.set('stats', state.stats);
 }
 
@@ -567,6 +572,7 @@ function renderList(cont, list, opts = {}){
 }
 function attachList(cont, source){
   cont.addEventListener('click', e => {
+    if (cont._swLP){ cont._swLP = false; return; }
     if (e.target.closest('[data-retry]')){ cont._retry && cont._retry(); return; }
     const ua = e.target.closest('[data-uid]');
     if (ua){ openArtist(+ua.dataset.uid); return; }
@@ -576,6 +582,59 @@ function attachList(cont, source){
     const list = cont._list || []; const i = +r.dataset.i;
     if (list[i]) playList(list, i, source);
   });
+  let lpT = null, lpY = 0;
+  cont.addEventListener('touchstart', e => {
+    const r = e.target.closest('.row-t'); if (!r) return;
+    lpY = e.touches[0].clientY;
+    lpT = setTimeout(() => {
+      lpT = null;
+      const list = cont._list || []; const i = +r.dataset.i;
+      if (list[i]){ cont._swLP = true; haptic(1); trackActionSheet(list[i], source, cont); }
+    }, 500);
+  }, { passive: true });
+  cont.addEventListener('touchmove', e => {
+    if (lpT && Math.abs(e.touches[0].clientY - lpY) > 10){ clearTimeout(lpT); lpT = null; }
+  }, { passive: true });
+  cont.addEventListener('touchend', () => { if (lpT){ clearTimeout(lpT); lpT = null; } }, { passive: true });
+  cont.addEventListener('contextmenu', e => {
+    const r = e.target.closest('.row-t'); if (!r) return;
+    e.preventDefault();
+    const list = cont._list || []; const i = +r.dataset.i;
+    if (list[i]) trackActionSheet(list[i], source, cont);
+  });
+}
+function playNext(track){
+  if (!track) return;
+  if (!P.q.length || P.i < 0){ P.q = [track]; P.i = 0; loadTrack(true); return; }
+  if (P.q[P.i] && P.q[P.i].id === track.id){ toast('Уже играет'); return; }
+  P.q.splice(P.i + 1, 0, track);
+  renderQueue();
+  toast('Воспроизвести следующим');
+  haptic(1);
+}
+function trackActionSheet(track, source, cont){
+  if (!track) return;
+  const liked = isLiked(track.id);
+  openSheet(track.title || 'Трек',
+    `<div class="row-t" style="pointer-events:none;background:var(--card2);margin-bottom:6px">
+      <div class="thumb"><img src="${esc(track.art) || PLACEHOLDER}"></div>
+      <div class="t-info"><div class="t-title">${esc(track.title)}</div><div class="t-artist">${esc(track.artist)}</div></div>
+    </div>
+    <button class="btn" id="ta-next" style="margin-top:10px;width:100%">⏭ Сделать следующим</button>
+    <button class="btn" id="ta-addpl" style="margin-top:8px;width:100%">＋ Добавить в плейлист</button>
+    <button class="btn" id="ta-like" style="margin-top:8px;width:100%">${liked ? '♥ Убрать из любимых' : '♥ В любимые'}</button>
+    <button class="btn" id="ta-play" style="margin-top:8px;width:100%">▶ Воспроизвести сейчас</button>`);
+  $('#qs-list').onclick = e => {
+    if (e.target.closest('#ta-next')){ closeSheet(); playNext(track); }
+    else if (e.target.closest('#ta-addpl')){ closeSheet(); addToPlaylistSheet(track); }
+    else if (e.target.closest('#ta-like')){ closeSheet(); toggleLike(track.id); }
+    else if (e.target.closest('#ta-play')){
+      closeSheet();
+      const list = (cont && cont._list) ? cont._list.filter(x => x && x.id) : [track];
+      const idx = list.findIndex(x => x.id === track.id);
+      playList(list, idx >= 0 ? idx : 0, source);
+    }
+  };
 }
 function updatePlayingRows(){
   const cur = current();
@@ -949,11 +1008,30 @@ $('#np-radio').addEventListener('click', () => {
   const opt = $('#opt-auto'); if (opt) opt.checked = state.autoRelated;
   toast(state.autoRelated ? 'Радио: похожие будут играть автоматически' : 'Радио выключено');
 });
-$('#np-shuffle').addEventListener('click', () => {
+function toggleShuffle(){
   state.shuffle = !state.shuffle; LS.set('shuffle', state.shuffle);
   $('#np-shuffle').classList.toggle('on', state.shuffle);
   toast(state.shuffle ? 'Перемешивание включено' : 'Перемешивание выключено');
-});
+}
+$('#np-shuffle').addEventListener('click', toggleShuffle);
+(() => {
+  if (typeof window === 'undefined' || typeof window.DeviceMotionEvent === 'undefined') return;
+  let lastShake = 0;
+  const TH = 16;
+  window.addEventListener('devicemotion', e => {
+    const a = e.accelerationIncludingGravity || e.acceleration;
+    if (!a) return;
+    const mag = Math.sqrt((a.x || 0) * (a.x || 0) + (a.y || 0) * (a.y || 0) + (a.z || 0) * (a.z || 0));
+    if (mag < TH) return;
+    const now = Date.now();
+    if (now - lastShake < 1500) return;
+    if (!current()) return;
+    lastShake = now;
+    haptic(0);
+    toggleShuffle();
+    if (state.shuffle) toast('Тряхнул — перемешивание');
+  }, { passive: true });
+})();
 $('#np-repeat').addEventListener('click', () => {
   state.repeat = state.repeat === 'off' ? 'all' : state.repeat === 'all' ? 'one' : 'off';
   LS.set('repeat', state.repeat);
@@ -1472,61 +1550,132 @@ $('#page-body').addEventListener('click', e => {
 });
 
 function openStats(){
-  const s = state.stats || {sec:0, art:{}, day:{}};
-  const hours = (s.sec || 0) / 3600;
+  const s = state.stats || {sec:0, art:{}, day:{}, trk:{}};
+  const totalSec = s.sec || 0;
+  const hh = Math.floor(totalSec / 3600);
+  const mm = Math.floor((totalSec % 3600) / 60);
   const now = Date.now();
-  let week = 0;
-  for (let i = 0; i < 7; i++){
-    const d = new Date(now - i * 86400000).toISOString().slice(0, 10);
-    week += (s.day && s.day[d]) || 0;
+  const DLAB = ['Вс','Пн','Вт','Ср','Чт','Пт','Сб'];
+  const days = [];
+  let weekSec = 0;
+  for (let i = 6; i >= 0; i--){
+    const d = new Date(now - i * 86400000);
+    const key = d.toISOString().slice(0, 10);
+    const sec = (s.day && s.day[key]) || 0;
+    weekSec += sec;
+    days.push({ label: DLAB[d.getDay()], sec, today: i === 0 });
   }
+  const maxDay = Math.max(1, ...days.map(d => d.sec));
   const arts = Object.entries(s.art || {}).sort((a, b) => b[1] - a[1]).slice(0, 5);
-  const max = arts.length ? arts[0][1] : 1;
+  const maxArt = arts.length ? arts[0][1] : 1;
+  let trks = [];
+  if (s.trk) trks = Object.values(s.trk).filter(x => x && x.s).sort((a, b) => b.s - a.s).slice(0, 5);
+  if (!trks.length && state.history.length){
+    trks = state.history.slice(0, 5).map(t => ({ t: t.title, a: t.artist, s: 0 }));
+  }
   openPage('Статистика', `
     <div class="stat-grid">
-      <div class="stat-card"><div class="stat-num">${hours < 100 ? hours.toFixed(1) : Math.round(hours)} ч</div><div class="stat-lbl">всего прослушано</div></div>
-      <div class="stat-card"><div class="stat-num">${(week / 3600).toFixed(1)} ч</div><div class="stat-lbl">за последние 7 дней</div></div>
-      <div class="stat-card"><div class="stat-num">${s.tracks || 0}</div><div class="stat-lbl">треков проиграно</div></div>
+      <div class="stat-card"><div class="stat-num">${hh}ч ${mm}м</div><div class="stat-lbl">всего прослушано</div></div>
+      <div class="stat-card"><div class="stat-num">${Math.round(weekSec / 60)}м</div><div class="stat-lbl">за 7 дней</div></div>
+      <div class="stat-card"><div class="stat-num">${s.tracks || 0}</div><div class="stat-lbl">воспроизведений</div></div>
       <div class="stat-card"><div class="stat-num">${state.likes.length}</div><div class="stat-lbl">в любимых</div></div>
     </div>
     <div class="card" style="margin-top:0">
+      <div class="row" style="justify-content:flex-start"><b>Активность за неделю</b></div>
+      <div class="stat-heat">${days.map(d => `<div class="heat-cell${d.today ? ' today' : ''}">
+        <div class="heat-bar" style="height:${Math.max(6, d.sec / maxDay * 100)}%"></div>
+        <div class="heat-lbl">${d.label}</div>
+      </div>`).join('')}</div>
+    </div>
+    <div class="card">
       <div class="row" style="justify-content:flex-start"><b>Топ артистов</b></div>
       ${arts.length ? arts.map(([n, sec]) => `<div class="stat-row">
-        <div class="stat-name">${esc(n)}<span>${(sec / 3600).toFixed(1)} ч</span></div>
-        <div class="stat-bar"><div class="stat-fill" style="width:${Math.max(4, sec / max * 100)}%"></div></div>
+        <div class="stat-name">${esc(n)}<span>${(sec / 60).toFixed(0)}м</span></div>
+        <div class="stat-bar"><div class="stat-fill" style="width:${Math.max(4, sec / maxArt * 100)}%"></div></div>
       </div>`).join('') : '<p class="note" style="margin-top:8px">Послушайте пару треков — здесь появится статистика</p>'}
+    </div>
+    <div class="card">
+      <div class="row" style="justify-content:flex-start"><b>Топ треков</b></div>
+      ${trks.length ? trks.map((t, i) => `<div class="stat-row">
+        <div class="stat-name"><span class="stat-rank">${i + 1}</span>${esc(t.t)}<span>${t.s ? (t.s / 60).toFixed(0) + 'м' : '—'}</span></div>
+        <div class="stat-sub">${esc(t.a)}</div>
+      </div>`).join('') : '<p class="note" style="margin-top:8px">Нет данных — послушайте любимое</p>'}
     </div>`);
 }
 $('#open-stats').addEventListener('click', openStats);
 
+function buildBackup(){
+  return {
+    v: 2, app: 'soundwave', date: new Date().toISOString(),
+    likes: state.likes, playlists: state.playlists, history: state.history, stats: state.stats,
+    settings: {
+      accent: state.accent, theme: state.theme, amoled: state.amoled,
+      autoRelated: state.autoRelated, fullOnly: state.fullOnly, viz: state.viz,
+      vizMode: state.vizMode, eq: state.eq, shuffle: state.shuffle, repeat: state.repeat, abLoop: state.abLoop
+    }
+  };
+}
+function applySettingsUI(){
+  const a = $('#opt-amoled'); if (a) a.checked = state.amoled;
+  const l = $('#opt-light'); if (l) l.checked = state.theme === 'light';
+  const au = $('#opt-auto'); if (au) au.checked = state.autoRelated;
+  const fo = $('#opt-full'); if (fo) fo.checked = state.fullOnly;
+  const vz = $('#opt-viz'); if (vz) vz.checked = state.viz;
+  $('#np-shuffle').classList.toggle('on', state.shuffle);
+  syncRepeat(); syncAB();
+}
 $('#data-export').addEventListener('click', () => {
-  const data = JSON.stringify({v:1, likes: state.likes, playlists: state.playlists, history: state.history,
-    stats: state.stats, settings: {accent: state.accent, amoled: state.amoled, autoRelated: state.autoRelated, fullOnly: state.fullOnly}});
-  openSheet('Экспорт данных',
-    `<div class="field"><textarea id="exp-ta" readonly>${esc(data)}</textarea></div>
-     <div class="btnrow"><button class="btn" id="exp-copy">Скопировать</button><button class="btn" id="exp-share">Поделиться</button></div>`);
-  $('#exp-ta').addEventListener('focus', e => e.target.select());
-  $('#exp-copy').onclick = () => { navigator.clipboard && navigator.clipboard.writeText(data); closeSheet(); toast('Скопировано в буфер'); };
-  $('#exp-share').onclick = () => { navigator.share ? navigator.share({text: data}).catch(()=>{}) : toast('Копирование недоступно'); };
+  const data = JSON.stringify(buildBackup(), null, 2);
+  try {
+    const blob = new Blob([data], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'soundwave-backup.json';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1500);
+    toast('Резервная копия сохранена');
+  } catch {
+    openSheet('Экспорт данных',
+      `<div class="field"><textarea id="exp-ta" readonly>${esc(data)}</textarea></div>
+       <div class="btnrow"><button class="btn" id="exp-copy">Скопировать</button></div>`);
+    $('#exp-ta').addEventListener('focus', e => e.target.select());
+    $('#exp-copy').onclick = () => { navigator.clipboard && navigator.clipboard.writeText(data); closeSheet(); toast('Скопировано в буфер'); };
+  }
 });
 $('#data-import').addEventListener('click', () => {
-  openSheet('Импорт данных',
-    `<div class="field"><textarea id="imp-ta" placeholder="Вставьте сюда строку экспорта"></textarea></div>
-     <div class="btnrow"><button class="btn" id="imp-go">Импортировать</button></div>`);
-  $('#imp-go').onclick = () => {
+  const fi = $('#imp-file'); if (!fi) return;
+  fi.value = ''; fi.click();
+});
+$('#imp-file').addEventListener('change', e => {
+  const f = e.target.files && e.target.files[0]; if (!f) return;
+  const reader = new FileReader();
+  reader.onload = () => {
     try {
-      const j = JSON.parse($('#imp-ta').value);
-      if (!j || !Array.isArray(j.likes)) throw new Error('неверный формат');
-      const ids = new Set(state.likes.map(x => x.id));
-      state.likes = j.likes.filter(x => x && x.id && !ids.has(x.id)).concat(state.likes);
-      if (Array.isArray(j.playlists)) state.playlists = j.playlists.concat(state.playlists);
-      if (Array.isArray(j.history)) state.history = j.history.concat(state.history.filter(h => !j.history.some(x => x.id === h.id))).slice(0, 100);
+      const j = JSON.parse(reader.result);
+      if (!j) throw new Error('пусто');
+      if (Array.isArray(j.likes)) state.likes = j.likes;
+      if (Array.isArray(j.playlists)) state.playlists = j.playlists;
+      if (Array.isArray(j.history)) state.history = j.history.slice(0, 100);
       if (j.stats) state.stats = j.stats;
-      if (j.settings){ Object.assign(state, j.settings); LS.set('accent', state.accent); LS.set('amoled', state.amoled); applyTheme(); }
-      LS.set('likes', state.likes); LS.set('playlists', state.playlists); LS.set('history', state.history); LS.set('stats', state.stats);
-      closeSheet(); toast('Импортировано'); renderLib();
-    } catch (e) { toast('Ошибка импорта: неверные данные'); }
+      if (j.settings){
+        Object.assign(state, j.settings);
+        LS.set('accent', state.accent); LS.set('theme', state.theme);
+        LS.set('amoled', state.amoled); LS.set('autorel', state.autoRelated);
+        LS.set('fullonly', state.fullOnly); LS.set('viz', state.viz);
+        LS.set('vizMode', state.vizMode); LS.set('eq', state.eq);
+        LS.set('shuffle', state.shuffle); LS.set('repeat', state.repeat);
+        applyTheme();
+      }
+      LS.set('likes', state.likes); LS.set('playlists', state.playlists);
+      LS.set('history', state.history); LS.set('stats', state.stats);
+      applySettingsUI();
+      if (curScreen === 'library') renderLib();
+      renderRecentCaro();
+      toast('Резервная копия восстановлена');
+    } catch { toast('Ошибка импорта: неверный файл'); }
   };
+  reader.onerror = () => toast('Не удалось прочитать файл');
+  reader.readAsText(f);
 });
 
 const lyrCache = {};
@@ -1715,6 +1864,17 @@ $('#iconset').addEventListener('click', e => {
   const name = b.dataset.ic;
   if (!window.__swNative){ $('#icon-note').hidden = false; return; }
   if (!nativeCmd({cmd:'seticon', name})) toast('Иконка недоступна');
+});
+const fontScale = LS.get('fontscale', 1);
+document.documentElement.style.setProperty('--fs', fontScale);
+$$('#font-seg button').forEach(b => b.classList.toggle('on', Math.abs((+b.dataset.fs) - fontScale) < 0.01));
+$('#font-seg').addEventListener('click', e => {
+  const b = e.target.closest('[data-fs]'); if (!b) return;
+  const fs = +b.dataset.fs;
+  document.documentElement.style.setProperty('--fs', fs);
+  LS.set('fontscale', fs);
+  $$('#font-seg button').forEach(x => x.classList.toggle('on', x === b));
+  haptic(0);
 });
 $('#opt-wake').checked = LS.get('wake', false);
 $('#opt-wake').addEventListener('change', e => {
