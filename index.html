@@ -588,7 +588,11 @@ const ACCENTS = {
   orange:['#ff5500','#ff9500','rgba(255,85,0,.16)','rgba(255,90,0,.45)'],
   green:['#30d158','#8affb5','rgba(48,209,88,.16)','rgba(48,209,88,.45)'],
   blue:['#0a84ff','#7ad7ff','rgba(10,132,255,.16)','rgba(10,132,255,.45)'],
-  pink:['#ff375f','#ff8fa3','rgba(255,55,95,.16)','rgba(255,55,95,.45)']
+  pink:['#ff375f','#ff8fa3','rgba(255,55,95,.16)','rgba(255,55,95,.45)'],
+  purple:['#bf5af2','#d8b4fe','rgba(191,90,242,.16)','rgba(191,90,242,.45)'],
+  teal:['#30d4e0','#9ee8f5','rgba(48,212,224,.16)','rgba(48,212,224,.45)'],
+  sunset:['#ff6b35','#ffd166','rgba(255,107,53,.16)','rgba(255,107,53,.45)'],
+  mint:['#00c896','#7fffd4','rgba(0,200,150,.16)','rgba(0,200,150,.45)']
 };
 
 const state = {
@@ -2063,7 +2067,7 @@ $('#cid-auto').addEventListener('click', async () => {
   } catch (e){ cidState = 'err'; updateCidUI(); toast('Не удалось найти ключ'); }
 });
 $('#accents').innerHTML = Object.entries(ACCENTS).map(([k, v]) =>
-  `<button class="chip${state.accent === k ? ' on' : ''}" data-ac="${k}" style="background:${k === state.accent ? '' : `linear-gradient(135deg,${v[0]},${v[1]})`};${k === state.accent ? '' : 'border-color:transparent'}">${({orange:'Оранж',green:'Зелёный',blue:'Синий',pink:'Розовый'})[k]}</button>`).join('');
+  `<button class="chip${state.accent === k ? ' on' : ''}" data-ac="${k}" style="background:${k === state.accent ? '' : `linear-gradient(135deg,${v[0]},${v[1]})`};${k === state.accent ? '' : 'border-color:transparent'}">${({orange:'Оранж',green:'Зелёный',blue:'Синий',pink:'Розовый',purple:'Фиолет',teal:'Бирюз',sunset:'Закат',mint:'Мятн'})[k]}</button>`).join('');
 $('#accents').addEventListener('click', e => {
   const b = e.target.closest('[data-ac]'); if (!b) return;
   state.accent = b.dataset.ac; LS.set('accent', state.accent); applyTheme();
