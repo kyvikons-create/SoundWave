@@ -32,6 +32,14 @@ const ACCENTS = {
   sunset:['#ff6b35','#ffd166','rgba(255,107,53,.16)','rgba(255,107,53,.45)'],
   mint:['#00c896','#7fffd4','rgba(0,200,150,.16)','rgba(0,200,150,.45)']
 };
+function buildCustomAccent(hex){
+  const c = String(hex || '#ff5500').toLowerCase();
+  const r = parseInt(c.slice(1,3),16) || 255, g = parseInt(c.slice(3,5),16) || 85, b = parseInt(c.slice(5,7),16) || 0;
+  const lit = v => Math.round(v + (255 - v) * 0.2);
+  const h = n => n.toString(16).padStart(2,'0');
+  const acc2 = '#' + h(lit(r)) + h(lit(g)) + h(lit(b));
+  return [c, acc2, `rgba(${r},${g},${b},.16)`, `rgba(${r},${g},${b},.45)`];
+}
 
 const state = {
   likes: LS.get('likes', []),
@@ -47,8 +55,10 @@ const state = {
   shuffle: LS.get('shuffle', false),
   repeat: LS.get('repeat', 'off'),
   vizMode: LS.get('vizMode', 0),
-  eq: LS.get('eq', 'flat')
+  eq: LS.get('eq', 'flat'),
+  abLoop: null
 };
+if (state.accent === 'custom'){ ACCENTS.custom = buildCustomAccent(LS.get('accent-custom', '#ff5500')); }
 
 function applyTheme(){
   const a = ACCENTS[state.accent] || ACCENTS.orange;
@@ -259,6 +269,7 @@ const audio = window.__swNative ? {
   removeEventListener(n, f){ audioEv[n] = (audioEv[n] || []).filter(x => x !== f); }
 } : new Audio();
 if (!window.__swNative) audio.preload = 'auto';
+try { audio.preservesPitch = true; } catch {}
 function canPlayHls(){
   if (window.__swNative) return true;
   try { return !!(audio.canPlayType && audio.canPlayType('application/vnd.apple.mpegurl')); }
@@ -348,6 +359,9 @@ audio.addEventListener('playing', () => setBusy(false));
 audio.addEventListener('canplay',  () => setBusy(false));
 let _ttRAF = 0, _ttP = 0, _ttCur = 0;
 audio.addEventListener('timeupdate', () => {
+  if (state.abLoop && state.abLoop.b != null && audio.currentTime >= state.abLoop.b){
+    try { audio.currentTime = state.abLoop.a; } catch {} nativeNP();
+  }
   const d = audio.duration || (current() && current().dur) || 1;
   _ttP = Math.min(1000, (audio.currentTime / d) * 1000 || 0);
   _ttCur = audio.currentTime;
@@ -475,6 +489,7 @@ function pushHistory(t){
   state.history = state.history.slice(0, 100);
   LS.set('history', state.history);
   if (curScreen === 'library' && libMode === 'history') renderLib();
+  renderRecentCaro();
 }
 
 const skeleton = n => Array.from({ length: n }, () =>
@@ -524,6 +539,23 @@ $('#caros').addEventListener('click', e => {
   const i = +c.dataset.ci;
   haptic(0);
   if (list[i]) playList(list, i, CARO_ROWS[+row.closest('[data-caro]').dataset.caro][0]);
+});
+function renderRecentCaro(){
+  const box = $('#recent-caro'); if (!box) return;
+  const list = (state.history || []).slice(0, 12);
+  if (!list.length){ box.innerHTML = ''; return; }
+  box.innerHTML = `<div class="caro"><div class="caro-h"><div class="caro-t">Недавно слушали</div></div>
+    <div class="caro-row">${list.map((t, j) => `<div class="card-t" data-ri="${j}">
+      <img class="card-art" loading="lazy" decoding="async" src="${esc(t.art) || PLACEHOLDER}" onerror="this.onerror=null;this.src=PLACEHOLDER">
+      <div class="card-n">${esc(t.title)}</div><div class="card-a">${esc(t.artist)}</div></div>`).join('')}</div></div>`;
+  box.querySelector('.caro-row')._list = list;
+}
+$('#recent-caro').addEventListener('click', e => {
+  const c = e.target.closest('[data-ri]'); if (!c) return;
+  const row = c.closest('.caro-row'); const list = (row && row._list) || [];
+  const i = +c.dataset.ri;
+  haptic(0);
+  if (list[i]) playList(list, i, 'Недавно слушали');
 });
 
 function renderList(cont, list, opts = {}){
@@ -629,6 +661,7 @@ $('#sugg').addEventListener('click', e => {
 function renderSearchHistory(){
   const h = LS.get('shistory', []);
   $('#hist-hint').hidden = !h.length;
+  const hc = $('#hist-clear'); if (hc) hc.hidden = !h.length;
   $('#hist').innerHTML = h.map(s => `<button class="chip on" data-sq="${esc(s)}">${esc(s)}</button>`).join('');
 }
 $('#hist').addEventListener('click', e => {
@@ -636,10 +669,11 @@ $('#hist').addEventListener('click', e => {
   $('#q').value = b.dataset.sq; $('#qclear').hidden = false;
   runSearch(b.dataset.sq, true);
 });
+$('#hist-clear').addEventListener('click', () => { LS.set('shistory', []); renderSearchHistory(); toast('История поиска очищена'); });
 function pushSearchHistory(q){
   let h = LS.get('shistory', []).filter(x => x !== q);
   h.unshift(q);
-  LS.set('shistory', h.slice(0, 8));
+  LS.set('shistory', h.slice(0, 12));
   renderSearchHistory();
 }
 renderSearchHistory();
@@ -702,11 +736,19 @@ dscroll.addEventListener('touchend', () => {
 
 let libMode = 'likes';
 let libFilterQ = '';
+let libSort = LS.get('libsort', 'recent');
 $('#lib-seg').addEventListener('click', e => {
   const b = e.target.closest('button'); if (!b) return;
   libMode = b.dataset.v;
   $$('#lib-seg button').forEach(x => x.classList.toggle('on', x === b));
   $('#lib-filter').hidden = libMode === 'playlists';
+  $('#lib-sort').hidden = libMode === 'playlists';
+  renderLib();
+});
+$('#lib-sort').addEventListener('click', e => {
+  const b = e.target.closest('[data-sort]'); if (!b) return;
+  libSort = b.dataset.sort; LS.set('libsort', libSort);
+  $$('#lib-sort .chip').forEach(c => c.classList.toggle('on', c === b));
   renderLib();
 });
 $('#lib-q').addEventListener('input', debounce(e => { libFilterQ = e.target.value.trim().toLowerCase(); renderLib(); }, 200));
@@ -733,9 +775,17 @@ $('#mix-btn').addEventListener('click', async () => {
     playList(mix, 0, 'Мой микс');
   } catch { toast('Не удалось собрать микс'); }
 });
+function sortLibList(list){
+  const arr = list.slice();
+  if (libSort === 'name') arr.sort((a,b) => (a.title||'').localeCompare(b.title||'', 'ru'));
+  else if (libSort === 'artist') arr.sort((a,b) => ((a.artist||'') + (a.title||'')).localeCompare((b.artist||'') + (b.title||''), 'ru'));
+  else if (libSort === 'plays') arr.sort((a,b) => (b.plays||0) - (a.plays||0));
+  return arr;
+}
 function renderLib(){
   const c = $('#lib-list');
   if (libMode === 'playlists'){
+    $('#lib-sort').hidden = true;
     const pls = state.playlists;
     let html = pls.map(p => `<div class="row-t" data-pll="${esc(p.id)}">
       <div class="thumb" style="border-radius:14px;background:var(--grad);display:grid;place-items:center;color:#fff">
@@ -748,7 +798,8 @@ function renderLib(){
     c._list = [];
     return;
   }
-  const list = libFiltered((libMode === 'likes' ? state.likes : state.history).slice());
+  $('#lib-sort').hidden = false;
+  const list = sortLibList(libFiltered((libMode === 'likes' ? state.likes : state.history).slice()));
   renderList(c, list);
   if (!list.length && libFilterQ) c.innerHTML = emptyState('Ничего', 'По запросу «' + libFilterQ + '» в списке нет совпадений');
   if (!list.length && !libFilterQ){
@@ -878,6 +929,7 @@ function setNP(t){
   syncHearts(t.id);
   renderQueue();
   resetLyrics();
+  state.abLoop = null; syncAB();
   setWebSession(t);
   nativeNP();
 }
@@ -912,6 +964,22 @@ function syncRepeat(){
   const b = $('#np-repeat');
   b.classList.toggle('on', state.repeat !== 'off');
   b.innerHTML = state.repeat === 'one' ? I.repeat1 : I.repeat;
+}
+$('#np-abloop').addEventListener('click', () => {
+  const t = current(); if (!t) return;
+  if (!state.abLoop){ state.abLoop = { a: audio.currentTime || 0, b: null }; toast('A: ' + fmt(state.abLoop.a)); }
+  else if (state.abLoop.b == null){
+    const b = audio.currentTime || 0;
+    if (b <= state.abLoop.a){ toast('B должна быть после A'); return; }
+    state.abLoop.b = b; toast('B: ' + fmt(b) + ' — цикл A-B');
+  } else { state.abLoop = null; toast('A-B сброшен'); }
+  syncAB(); haptic(0);
+});
+function syncAB(){
+  const b = $('#np-abloop'); if (!b) return;
+  if (!state.abLoop){ b.classList.remove('on'); b.textContent = 'A-B'; return; }
+  b.classList.add('on');
+  b.textContent = state.abLoop.b == null ? 'A ' + fmt(state.abLoop.a) : 'A-B';
 }
 function setBusy(b){ $('#np-play').classList.toggle('busy', b); }
 function syncPlayUI(){
@@ -1612,19 +1680,31 @@ $('#cid-auto').addEventListener('click', async () => {
     cidState = 'ok'; updateCidUI(); toast('Готово, ключ обновлён');
   } catch (e){ cidState = 'err'; updateCidUI(); toast('Не удалось найти ключ'); }
 });
-$('#accents').innerHTML = Object.entries(ACCENTS).map(([k, v]) =>
-  `<button class="chip${state.accent === k ? ' on' : ''}" data-ac="${k}" style="background:${k === state.accent ? '' : `linear-gradient(135deg,${v[0]},${v[1]})`};${k === state.accent ? '' : 'border-color:transparent'}">${({orange:'Оранж',green:'Зелёный',blue:'Синий',pink:'Розовый',purple:'Фиолет',teal:'Бирюз',sunset:'Закат',mint:'Мятн'})[k]}</button>`).join('');
+$('#accents').innerHTML = Object.entries(ACCENTS).filter(([k]) => k !== 'custom').map(([k, v]) =>
+  `<button class="chip${state.accent === k ? ' on' : ''}" data-ac="${k}" style="background:${k === state.accent ? '' : `linear-gradient(135deg,${v[0]},${v[1]})`};${k === state.accent ? '' : 'border-color:transparent'}">${({orange:'Оранж',green:'Зелёный',blue:'Синий',pink:'Розовый',purple:'Фиолет',teal:'Бирюз',sunset:'Закат',mint:'Мятн'})[k]}</button>`).join('') +
+  `<button class="chip${state.accent === 'custom' ? ' on' : ''}" id="acc-custom">Своя</button><input type="color" id="acc-color" style="display:none">`;
+if (state.accent === 'custom'){ const ac = $('#acc-color'); if (ac) ac.value = LS.get('accent-custom', '#ff5500'); }
 $('#accents').addEventListener('click', e => {
+  if (e.target.closest('#acc-custom')){ const inp = $('#acc-color'); if (inp) inp.click(); return; }
   const b = e.target.closest('[data-ac]'); if (!b) return;
   state.accent = b.dataset.ac; LS.set('accent', state.accent); applyTheme();
   $$('#accents .chip').forEach(c => {
-    const k = c.dataset.ac, v = ACCENTS[k];
+    const k = c.dataset.ac; if (!k) return;
+    const v = ACCENTS[k];
     c.classList.toggle('on', k === state.accent);
     c.style.background = k === state.accent ? '' : `linear-gradient(135deg,${v[0]},${v[1]})`;
     c.style.borderColor = k === state.accent ? '' : 'transparent';
   });
   haptic(0);
   toast('Акцент обновлён');
+});
+$('#acc-color').addEventListener('input', e => {
+  const hex = e.target.value;
+  ACCENTS.custom = buildCustomAccent(hex);
+  state.accent = 'custom'; LS.set('accent', 'custom'); LS.set('accent-custom', hex);
+  applyTheme();
+  $$('#accents .chip').forEach(c => c.classList.toggle('on', c.id === 'acc-custom'));
+  haptic(0); toast('Акцент обновлён');
 });
 const ICON_SETS = [['Оранж', ''], ['Синий', 'alt-blue'], ['Розовый', 'alt-pink'], ['Зелёный', 'alt-green']];
 $('#iconset').innerHTML = ICON_SETS.map(([n, id], i) =>
@@ -1662,7 +1742,7 @@ $('#opt-viz').addEventListener('change', e => {
     setTimeout(() => location.reload(), 1400);
   }
 });
-$('#clr-hist').addEventListener('click', () => { state.history = []; LS.set('history', []); if (curScreen === 'library') renderLib(); toast('История очищена'); });
+$('#clr-hist').addEventListener('click', () => { state.history = []; LS.set('history', []); if (curScreen === 'library') renderLib(); renderRecentCaro(); toast('История очищена'); });
 $('#clr-likes').addEventListener('click', () => {
   if (!confirm('Удалить все любимые треки?')) return;
   state.likes = []; LS.set('likes', []);
@@ -1708,11 +1788,13 @@ window.addEventListener('pagehide', saveSession);
   $('#np-like').innerHTML = I.heart;
   $('#np-shuffle').classList.toggle('on', state.shuffle);
   syncRepeat();
+  syncAB();
   $('#np-radio').classList.toggle('on', state.autoRelated);
   $('#np-vizm').textContent = VIZ_MODES[state.vizMode];
   $('#np-vizm').classList.toggle('on', state.vizMode !== 0);
   $('#np-eq').textContent = state.eq === 'flat' ? 'EQ' : state.eq[0].toUpperCase() + state.eq.slice(1);
   $('#np-eq').classList.toggle('on', state.eq !== 'flat');
+  $$('#lib-sort .chip').forEach(c => c.classList.toggle('on', c.dataset.sort === libSort));
   applyTheme();
   updateCidUI();
   attachList($('#search-results'), 'Поиск');
@@ -1724,6 +1806,7 @@ window.addEventListener('pagehide', saveSession);
   discoverState.loaded = true;
   loadDiscover(true);
   loadCaros();
+  renderRecentCaro();
   apiGet('/search/tracks', { q: 'test', limit: 1 })
     .then(() => { cidState = 'ok'; updateCidUI(); })
     .catch(() => { cidState = 'err'; updateCidUI(); });
