@@ -61,6 +61,11 @@
           <p class="hint">Настроение и активность</p>
           <div class="chips scrollx mood-stations" id="mood-stations"></div>
         </div>
+        <div class="decades-wrap">
+          <p class="hint">Десятилетия</p>
+          <div class="chips scrollx" id="decades"></div>
+        </div>
+        <div id="onrepeat"></div>
         <div id="recent-caro"></div>
         <div id="caros"></div>
         <div id="chart-list" class="list"></div>
@@ -279,11 +284,31 @@
         <div class="lyr-a" id="lyr-a"></div>
       </div>
       <button class="lyr-kara" id="lyr-kara" aria-pressed="false">Караоке</button>
+      <button class="lyr-edit" id="lyr-edit" aria-label="Редактировать текст">✎</button>
       <button class="lyr-x" id="lyr-x" aria-label="Закрыть">
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
       </button>
     </div>
     <div class="lyr-body" id="lyr-body"></div>
+  </div>
+
+  <div id="palette" class="palette" hidden>
+    <div class="palette-bd" id="palette-bd"></div>
+    <div class="palette-panel">
+      <input id="palette-input" type="text" placeholder="Поиск действий…" autocomplete="off" spellcheck="false">
+      <div id="palette-list"></div>
+    </div>
+  </div>
+
+  <div id="onboard" class="onboard" hidden>
+    <div class="onboard-card">
+      <div class="onboard-ic" id="onboard-ic"></div>
+      <h3 id="onboard-t"></h3>
+      <p id="onboard-d"></p>
+      <div class="onboard-dots" id="onboard-dots"></div>
+      <button class="btn" id="onboard-next">Далее</button>
+      <button class="btn" id="onboard-skip" style="margin-top:8px;width:100%">Пропустить</button>
+    </div>
   </div>
 
   <div id="toast" class="toast" hidden></div>

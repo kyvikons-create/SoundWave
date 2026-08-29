@@ -786,6 +786,45 @@ $('#mood-stations').addEventListener('click', e => {
   haptic(0);
   runSearch(q, true);
 });
+const DECADES = [['80s','80s hits'],['90s','90s rock'],['2000s','2000s pop'],['2010s','2010s hip hop'],['2020s','2020s hits']];
+$('#decades').innerHTML = DECADES.map(([label, q]) =>
+  `<button class="chip" data-dq="${esc(q)}">${esc(label)}</button>`).join('');
+$('#decades').addEventListener('click', e => {
+  const b = e.target.closest('[data-dq]'); if (!b) return;
+  const q = b.dataset.dq;
+  $$('#decades .chip').forEach(c => c.classList.toggle('on', c === b));
+  showScreen('search');
+  const input = $('#q');
+  input.value = q;
+  $('#qclear').hidden = false;
+  searchState.mode = 'tracks';
+  $$('#search-seg button').forEach(x => x.classList.toggle('on', x.dataset.v === 'tracks'));
+  $('#search-home').style.display = 'none';
+  haptic(0);
+  runSearch(q, true);
+});
+function renderOnRepeat(){
+  const box = $('#onrepeat'); if (!box) return;
+  const trk = state.stats.trk || {};
+  let list = Object.entries(trk).filter(([,x]) => x && x.s).sort(([,a],[,b]) => (b.s||0) - (a.s||0)).slice(0, 12).map(([id, tk]) => {
+    const full = findTrack(+id);
+    return full || { id: +id, title: tk.t || 'Без названия', artist: tk.a || '', art: '', dur: 0 };
+  });
+  if (list.length < 3) list = (state.history || []).slice(0, 12);
+  if (!list.length){ box.innerHTML = ''; return; }
+  box.innerHTML = `<div class="caro"><div class="caro-h"><div class="caro-t">On Repeat</div></div>
+    <div class="caro-row">${list.map((t, j) => `<div class="card-t" data-ori="${j}">
+      <img class="card-art" loading="lazy" decoding="async" src="${esc(t.art) || PLACEHOLDER}" onerror="this.onerror=null;this.src=PLACEHOLDER">
+      <div class="card-n">${esc(t.title)}</div><div class="card-a">${esc(t.artist)}</div></div>`).join('')}</div></div>`;
+  box.querySelector('.caro-row')._list = list;
+}
+$('#onrepeat').addEventListener('click', e => {
+  const c = e.target.closest('[data-ori]'); if (!c) return;
+  const row = c.closest('.caro-row'); const list = (row && row._list) || [];
+  const i = +c.dataset.ori;
+  haptic(0);
+  if (list[i]) playList(list, i, 'On Repeat');
+});
 async function loadDiscover(reset){
   if (reset){ discoverState.offset = 0; discoverState.done = false; }
   discoverState.loading = true;
@@ -992,6 +1031,7 @@ function showScreen(s){
   $$('.screen').forEach(el => el.classList.toggle('active', el.id === 'scr-' + s));
   $$('.tab').forEach(b => b.classList.toggle('on', b.dataset.s === s));
   if (s === 'discover' && !discoverState.loaded){ discoverState.loaded = true; loadDiscover(true); }
+  if (s === 'discover') renderOnRepeat();
   if (s === 'library') renderLib();
 }
 $$('.tab').forEach(b => b.addEventListener('click', () => { haptic(0); showScreen(b.dataset.s); }));
@@ -1822,6 +1862,7 @@ $('#imp-file').addEventListener('change', e => {
 });
 
 const lyrCache = {};
+function fmtLRC(sec){ const m = Math.floor(sec/60), s = (sec % 60); return '[' + m + ':' + String(s.toFixed(2)).padStart(5,'0') + ']'; }
 function parseLRC(s){
   const out = [];
   for (const line of s.split('\n')){
@@ -1835,6 +1876,13 @@ function parseLRC(s){
 const cleanTitle = t => t.replace(/\(.*?\)|\[.*?\]/g, ' ').replace(/\s+/g, ' ').trim();
 async function fetchLyrics(track){
   if (lyrCache[track.id]) return lyrCache[track.id];
+  const edited = LS.get('lyr-edit-' + track.id, null);
+  if (edited != null){
+    const isLrc = /\[(\d+):(\d+(?:\.\d+)?)\]/.test(edited);
+    const res = { plain: isLrc ? '' : edited, synced: isLrc ? edited : '', src: 'local-edit' };
+    lyrCache[track.id] = res;
+    return res;
+  }
   const title = cleanTitle(track.title);
   let res = { plain: '', synced: '', src: '' };
   const withTimeout = (p, ms) => Promise.race([p, new Promise(r => setTimeout(() => r(null), ms))]);
@@ -1904,10 +1952,10 @@ async function fetchLyrics(track){
   lyrCache[track.id] = res;
   return res;
 }
-let lyrLines = [], lyrActive = -1, lyrOpenTrack = 0;
+let lyrLines = [], lyrActive = -1, lyrOpenTrack = 0, lyrEditing = false;
 const karaBtn = $('#lyr-kara');
 function resetLyrics(){
-  lyrLines = []; lyrActive = -1; lyrOpenTrack = 0;
+  lyrLines = []; lyrActive = -1; lyrOpenTrack = 0; lyrEditing = false;
   if (karaBtn){ karaBtn.hidden = true; karaBtn.classList.remove('on'); }
 }
 function syncKaraokeBtn(){
@@ -1972,6 +2020,7 @@ $('#lyr-body').addEventListener('click', e => {
   audio.currentTime = +ln.dataset.lt; nativeNP();
 });
 function updateLyrics(){
+  if (lyrEditing) return;
   if (!lyrLines.length || !$('#lyr').classList.contains('open')) return;
   const ct = audio.currentTime;
   let idx = -1;
@@ -2004,7 +2053,40 @@ function updateLyrics(){
   }
   if (scrollTarget != null) $('#lyr-body').scrollTo({ top: scrollTarget, behavior: 'smooth' });
 }
-
+$('#lyr-edit').addEventListener('click', () => {
+  const t = current(); if (!t) return;
+  lyrEditing = true;
+  const cached = lyrCache[t.id];
+  let cur = '';
+  if (cached && (cached.synced || cached.plain)) cur = cached.synced || cached.plain;
+  else if (lyrLines.length) cur = lyrLines.map(l => fmtLRC(l.t) + l.text).join('\n');
+  const body = $('#lyr-body');
+  body.innerHTML = `<div class="lyr-edit-wrap">
+    <textarea id="lyr-edit-ta" class="lyr-edit-ta" placeholder="[00:12.34] Текст строки…">${esc(cur)}</textarea>
+    <div class="btnrow" style="margin-top:10px">
+      <button class="btn" id="lyr-save">Сохранить</button>
+      <button class="btn" id="lyr-cancel">Отмена</button>
+    </div>
+    <button class="btn danger" id="lyr-clear" style="margin-top:8px;width:100%">Удалить правку</button>
+    <p class="note" style="margin-top:10px">Текст сохраняется только локально. Формат LRC: [mm:ss.xx] строка.</p>
+  </div>`;
+  const ta = $('#lyr-edit-ta');
+  ta.focus();
+  $('#lyr-save').onclick = () => {
+    const txt = ta.value;
+    LS.set('lyr-edit-' + t.id, txt);
+    lyrCache[t.id] = null; lyrEditing = false;
+    toast('Текст сохранён');
+    $('#np-lyrics').click();
+  };
+  $('#lyr-cancel').onclick = () => { lyrEditing = false; $('#np-lyrics').click(); };
+  $('#lyr-clear').onclick = () => {
+    LS.set('lyr-edit-' + t.id, null);
+    lyrCache[t.id] = null; lyrEditing = false;
+    toast('Локальная правка удалена');
+    $('#np-lyrics').click();
+  };
+});
 function updateCidUI(){
   const b = $('#cid-status');
   b.textContent = cidState === 'ok' ? 'работает' : cidState === 'err' ? 'ошибка' : 'проверка…';
@@ -2120,8 +2202,105 @@ watchSentinel('#chart-sent', '#discover-scroll', () => {
   if (!discoverState.loading && !discoverState.done) loadDiscover(false);
 });
 
+const PALETTE_ACTIONS = [
+  { id: 'search', label: 'Поиск треков', ic: '🔍', run: () => { showScreen('search'); $('#q').focus(); } },
+  { id: 'home', label: 'Главная', ic: '🏠', run: () => showScreen('discover') },
+  { id: 'library', label: 'Библиотека', ic: '📚', run: () => showScreen('library') },
+  { id: 'stats', label: 'Статистика', ic: '📊', run: () => openStats() },
+  { id: 'theme', label: 'Переключить тему', ic: '🌗', run: () => {
+    state.theme = state.theme === 'light' ? 'dark' : 'light';
+    LS.set('theme', state.theme); applyTheme();
+    const l = $('#opt-light'); if (l) l.checked = state.theme === 'light';
+    toast('Тема: ' + (state.theme === 'light' ? 'светлая' : 'тёмная'));
+  } },
+  { id: 'amoled', label: 'Переключить AMOLED', ic: '⬛', run: () => {
+    state.amoled = !state.amoled;
+    LS.set('amoled', state.amoled); applyTheme();
+    const a = $('#opt-amoled'); if (a) a.checked = state.amoled;
+    toast('AMOLED ' + (state.amoled ? 'вкл' : 'выкл'));
+  } },
+  { id: 'backup', label: 'Экспорт бэкапа', ic: '💾', run: () => $('#data-export').click() },
+  { id: 'next', label: 'Следующий', ic: '⏭', run: () => next() },
+  { id: 'prev', label: 'Предыдущий', ic: '⏮', run: () => prev() },
+  { id: 'play', label: 'Play/Pause', ic: '▶', run: () => toggle() }
+];
+let paletteOpen = false, paletteSel = 0, paletteFiltered = [];
+function openPalette(){
+  paletteOpen = true; paletteSel = 0;
+  const p = $('#palette');
+  p.hidden = false;
+  requestAnimationFrame(() => p.classList.add('open'));
+  paletteFiltered = PALETTE_ACTIONS.slice();
+  renderPaletteList();
+  const inp = $('#palette-input');
+  inp.value = '';
+  inp.focus();
+}
+function closePalette(){
+  paletteOpen = false;
+  const p = $('#palette');
+  p.classList.remove('open');
+  setTimeout(() => { p.hidden = true; }, 220);
+}
+function renderPaletteList(){
+  const list = $('#palette-list');
+  if (!paletteFiltered.length){ list.innerHTML = '<div class="pal-empty">Ничего не найдено</div>'; return; }
+  list.innerHTML = paletteFiltered.map((a, i) => `<div class="pal-item${i === paletteSel ? ' sel' : ''}" data-pi="${i}">
+    <span class="pal-ic">${a.ic}</span><span class="pal-l">${esc(a.label)}</span></div>`).join('');
+}
+$('#palette-input').addEventListener('input', e => {
+  const q = e.target.value.trim().toLowerCase();
+  paletteFiltered = q ? PALETTE_ACTIONS.filter(a => a.label.toLowerCase().includes(q)) : PALETTE_ACTIONS.slice();
+  paletteSel = 0; renderPaletteList();
+});
+$('#palette-list').addEventListener('click', e => {
+  const it = e.target.closest('[data-pi]'); if (!it) return;
+  const a = paletteFiltered[+it.dataset.pi]; if (!a) return;
+  closePalette(); a.run();
+});
+$('#palette-bd').addEventListener('click', closePalette);
+
+let kbMuted = false, kbPrevVol = 1;
 document.addEventListener('keydown', e => {
-  if (e.code === 'Space' && !e.target.closest('input, textarea')){ e.preventDefault(); toggle(); }
+  if ((e.ctrlKey || e.metaKey) && e.code === 'KeyK'){
+    e.preventDefault();
+    if (paletteOpen) closePalette(); else openPalette();
+    return;
+  }
+  if (paletteOpen){
+    if (e.key === 'Escape'){ e.preventDefault(); closePalette(); return; }
+    if (e.key === 'ArrowDown'){ e.preventDefault(); paletteSel = Math.min(paletteFiltered.length - 1, paletteSel + 1); renderPaletteList(); return; }
+    if (e.key === 'ArrowUp'){ e.preventDefault(); paletteSel = Math.max(0, paletteSel - 1); renderPaletteList(); return; }
+    if (e.key === 'Enter'){ e.preventDefault(); const a = paletteFiltered[paletteSel]; if (a){ closePalette(); a.run(); } return; }
+    return;
+  }
+  const tag = e.target.tagName;
+  const inField = tag === 'INPUT' || tag === 'TEXTAREA' || e.target.isContentEditable;
+  if (inField) return;
+  if (e.code === 'Space'){ e.preventDefault(); toggle(); return; }
+  const t = current();
+  switch (e.key){
+    case 'ArrowRight': if (t){ try { audio.currentTime = Math.min(audio.duration || 0, (audio.currentTime || 0) + 5); } catch {} nativeNP(); } break;
+    case 'ArrowLeft':  if (t){ try { audio.currentTime = Math.max(0, (audio.currentTime || 0) - 5); } catch {} nativeNP(); } break;
+    case 'ArrowUp': { e.preventDefault(); const v = Math.min(1, (audio.volume || 0) + 0.1); audio.volume = v; if (v > 0) kbMuted = false; toast('Громкость ' + Math.round(v * 100) + '%'); break; }
+    case 'ArrowDown': { e.preventDefault(); const v = Math.max(0, (audio.volume || 0) - 0.1); audio.volume = v; toast('Громкость ' + Math.round(v * 100) + '%'); break; }
+    case 'm': case 'M': {
+      if (kbMuted){ audio.volume = kbPrevVol || 1; kbMuted = false; toast('Звук включён'); }
+      else { kbPrevVol = audio.volume || 1; audio.volume = 0; kbMuted = true; toast('Звук выключен'); }
+      break;
+    }
+    case 's': case 'S': toggleShuffle(); break;
+    case 'r': case 'R': {
+      state.repeat = state.repeat === 'off' ? 'all' : state.repeat === 'all' ? 'one' : 'off';
+      LS.set('repeat', state.repeat); syncRepeat();
+      toast(state.repeat === 'off' ? 'Повтор выключен' : state.repeat === 'all' ? 'Повтор очереди' : 'Повтор трека');
+      break;
+    }
+    case 'n': case 'N': next(); break;
+    case 'p': case 'P': prev(); break;
+    case 'l': case 'L': if (t) toggleLike(t.id); break;
+    case '/': e.preventDefault(); showScreen('search'); $('#q').focus(); break;
+  }
 });
 document.addEventListener('visibilitychange', () => {
   if (document.hidden){
@@ -2134,6 +2313,39 @@ document.addEventListener('visibilitychange', () => {
 });
 setInterval(flushStats, 15000);
 window.addEventListener('pagehide', saveSession);
+
+const ONBOARD_STEPS = [
+  { ic: '🔍', t: 'Поиск музыки', d: 'Откройте вкладку «Поиск» и введите исполнителя, трек или жанр.' },
+  { ic: '▶', t: 'Играйте', d: 'Нажмите на любой трек — он начнёт играть. Свайните вверх по мини-плееру для полного экрана.' },
+  { ic: '📚', t: 'Библиотека', d: 'Сохраняйте любимые треки сердечком и создавайте свои плейлисты.' }
+];
+let onboardStep = 0;
+function showOnboard(){
+  const o = $('#onboard'); if (!o) return;
+  onboardStep = 0;
+  o.hidden = false;
+  requestAnimationFrame(() => o.classList.add('open'));
+  renderOnboardStep();
+}
+function renderOnboardStep(){
+  const s = ONBOARD_STEPS[onboardStep];
+  $('#onboard-ic').textContent = s.ic;
+  $('#onboard-t').textContent = s.t;
+  $('#onboard-d').textContent = s.d;
+  $('#onboard-dots').innerHTML = ONBOARD_STEPS.map((_, i) => `<span class="ob-dot${i === onboardStep ? ' on' : ''}"></span>`).join('');
+  $('#onboard-next').textContent = onboardStep === ONBOARD_STEPS.length - 1 ? 'Понятно' : 'Далее';
+}
+function closeOnboard(){
+  const o = $('#onboard'); if (!o) return;
+  o.classList.remove('open');
+  setTimeout(() => { o.hidden = true; }, 280);
+  LS.set('onboarded', true);
+}
+$('#onboard-next').addEventListener('click', () => {
+  if (onboardStep < ONBOARD_STEPS.length - 1){ onboardStep++; renderOnboardStep(); haptic(0); }
+  else { closeOnboard(); haptic(0); }
+});
+$('#onboard-skip').addEventListener('click', () => { closeOnboard(); haptic(0); });
 
 (async () => {
   $('#mini-play').innerHTML = I.play;
@@ -2164,6 +2376,8 @@ window.addEventListener('pagehide', saveSession);
   loadDiscover(true);
   loadCaros();
   renderRecentCaro();
+  renderOnRepeat();
+  if (!LS.get('onboarded', false)) showOnboard();
   apiGet('/search/tracks', { q: 'test', limit: 1 })
     .then(() => { cidState = 'ok'; updateCidUI(); })
     .catch(() => { cidState = 'err'; updateCidUI(); });
