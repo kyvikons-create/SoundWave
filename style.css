@@ -427,3 +427,63 @@ html[data-theme="light"] .share-ph{background:#e8e8ee}
 .stat-sub{font-size:calc(12px * var(--fs,1));color:var(--t2);margin-top:3px}
 .stat-rank{color:var(--acc2);font-weight:800;margin-right:5px}
 code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;background:var(--card2);padding:1px 5px;border-radius:5px;font-size:.92em}
+
+/* ===== Wave 4: mood stations / smart playlists / badges / donut / karaoke / pin ===== */
+.mood-wrap{margin:0 -18px 22px;padding:0 18px}
+.mood-stations{gap:10px}
+.mood-chip{display:flex;align-items:center;gap:7px;padding:11px 16px;border-radius:18px;color:#f4f4f8;font-size:13px;font-weight:700}
+.mood-chip:active{transform:scale(.95)}
+.mood-em{font-size:18px;line-height:1}
+
+.smart-grid{display:flex;gap:12px;overflow-x:auto;padding-bottom:6px;margin-bottom:14px;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.smart-grid::-webkit-scrollbar{display:none}
+.smart-card{flex:none;width:148px;padding:16px 14px;border-radius:var(--r-s);background:var(--card2);border:1px solid var(--line2);display:flex;flex-direction:column;gap:4px;text-align:left;transition:transform .18s var(--spring)}
+.smart-card:active{transform:scale(.97)}
+.smart-ic{font-size:26px;line-height:1;margin-bottom:4px}
+.smart-n{font-size:14px;font-weight:750;color:#f4f4f8}
+.smart-c{font-size:11.5px;color:var(--t2);font-weight:600}
+
+.badge-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:10px;margin-top:10px}
+.achv{background:var(--card2);border:1px solid var(--line2);border-radius:14px;padding:14px 10px;text-align:center;transition:transform .15s var(--spring)}
+.achv.locked{opacity:.45;filter:grayscale(.75)}
+.achv-ic{font-size:26px;line-height:1;margin-bottom:6px}
+.achv-n{font-size:12px;font-weight:700;color:#f4f4f8;line-height:1.25}
+.achv-st{font-size:10.5px;color:var(--t2);margin-top:5px;font-weight:650}
+.achv:not(.locked) .achv-st{color:var(--acc2)}
+
+.donut{display:flex;align-items:center;gap:18px;margin-top:12px;flex-wrap:wrap}
+.donut-ring{width:120px;height:120px;border-radius:50%;flex:none;position:relative;box-shadow:0 10px 30px rgba(0,0,0,.4)}
+.donut-hole{position:absolute;inset:18px;border-radius:50%;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px}
+.donut-hole b{font-size:22px;font-weight:900;color:#f4f4f8}
+.donut-hole span{font-size:11px;color:var(--t2);font-weight:600}
+.donut-legend{flex:1;min-width:120px;display:flex;flex-direction:column;gap:7px}
+.lg-row{display:flex;align-items:center;gap:9px;font-size:13px}
+.lg-dot{width:12px;height:12px;border-radius:4px;flex:none}
+.lg-n{flex:1;color:#f4f4f8;font-weight:600}
+.lg-v{color:var(--t2);font-weight:700;font-variant-numeric:tabular-nums}
+
+.lyr-kara{padding:6px 13px;border-radius:16px;background:rgba(255,255,255,.09);color:rgba(255,255,255,.7);font-size:12px;font-weight:700;border:1px solid var(--line2);flex:none;transition:transform .15s var(--spring)}
+.lyr-kara:active{transform:scale(.92)}
+.lyr-kara.on{background:var(--accg);border-color:var(--acc2);color:var(--acc2)}
+.lyr-line .kw-w{transition:color .12s}
+.lyr-line.on .kw-w.kw{color:var(--acc2);font-weight:800;text-shadow:0 0 20px var(--accg)}
+
+.pin-mark{font-size:13px;flex:none;line-height:1}
+.row-t.pinned{background:var(--accg)}
+.row-t.pinned .t-title{font-weight:750}
+
+html[data-theme="light"] .mood-chip,
+html[data-theme="light"] .smart-card,
+html[data-theme="light"] .achv{background:var(--card2)}
+html[data-theme="light"] .lyr-kara{background:rgba(0,0,0,.06);color:rgba(0,0,0,.7)}
+html[data-theme="light"] .row-t.pinned{background:var(--accg)}
+
+.mood-chip{font-size:calc(13px * var(--fs,1))}
+.smart-n{font-size:calc(14px * var(--fs,1))}
+.smart-c{font-size:calc(11.5px * var(--fs,1))}
+.achv-n{font-size:calc(12px * var(--fs,1))}
+.achv-st{font-size:calc(10.5px * var(--fs,1))}
+.lg-row{font-size:calc(13px * var(--fs,1))}
+.donut-hole b{font-size:calc(22px * var(--fs,1))}
+.donut-hole span{font-size:calc(11px * var(--fs,1))}
+.lyr-kara{font-size:calc(12px * var(--fs,1))}

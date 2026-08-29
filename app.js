@@ -56,7 +56,9 @@ const state = {
   repeat: LS.get('repeat', 'off'),
   vizMode: LS.get('vizMode', 0),
   eq: LS.get('eq', 'flat'),
-  abLoop: null
+  abLoop: null,
+  pinned: LS.get('pinned', []),
+  karaoke: LS.get('karaoke', false)
 };
 if (state.accent === 'custom'){ ACCENTS.custom = buildCustomAccent(LS.get('accent-custom', '#ff5500')); }
 
@@ -460,6 +462,8 @@ function flushStats(){
   state.stats.day = state.stats.day || {};
   const today = new Date().toISOString().slice(0, 10);
   state.stats.day[today] = (state.stats.day[today] || 0) + add;
+  const hr = new Date().getHours();
+  if (hr >= 0 && hr < 5) state.stats.lateNight = true;
   state.stats.tracks = (state.stats.tracks || 0) + 1;
   state.stats.trk = state.stats.trk || {};
   let tk = state.stats.trk[t.id];
@@ -504,13 +508,15 @@ const emptyState = (title, text, retry) =>
 
 function trackRow(t, i, rank){
   const liked = isLiked(t.id);
-  return `<div class="row-t" data-i="${i}" data-tid="${esc(t.id)}">
+  const pinned = state.pinned.includes(t.id);
+  return `<div class="row-t${pinned ? ' pinned' : ''}" data-i="${i}" data-tid="${esc(t.id)}">
     <div class="thumb"><img loading="lazy" decoding="async" src="${esc(t.art) || PLACEHOLDER}" onerror="this.onerror=null;this.src=PLACEHOLDER"></div>
     <div class="t-info">
       <div class="t-title">${esc(t.title)}</div>
       <div class="t-artist"${t.uid ? ` data-uid="${esc(t.uid)}"` : ''}>${esc(t.artist)}${t.snip ? ' · фрагмент' : ''}</div>
     </div>
     <div class="t-side">
+      ${pinned ? '<span class="pin-mark" title="Закреплён">📌</span>' : ''}
       ${rank ? `<span class="rank${rank <= 3 ? ' top' : ''}">${rank}</span>` : ''}
       <span class="t-dur">${fmt(t.dur)}</span>
       <button class="heart${liked ? ' on' : ''}" data-like="${esc(t.id)}" aria-label="Нравится">${liked ? I.heartF : I.heart}</button>
@@ -615,6 +621,7 @@ function playNext(track){
 function trackActionSheet(track, source, cont){
   if (!track) return;
   const liked = isLiked(track.id);
+  const isPinned = state.pinned.includes(track.id);
   openSheet(track.title || 'Трек',
     `<div class="row-t" style="pointer-events:none;background:var(--card2);margin-bottom:6px">
       <div class="thumb"><img src="${esc(track.art) || PLACEHOLDER}"></div>
@@ -623,11 +630,13 @@ function trackActionSheet(track, source, cont){
     <button class="btn" id="ta-next" style="margin-top:10px;width:100%">⏭ Сделать следующим</button>
     <button class="btn" id="ta-addpl" style="margin-top:8px;width:100%">＋ Добавить в плейлист</button>
     <button class="btn" id="ta-like" style="margin-top:8px;width:100%">${liked ? '♥ Убрать из любимых' : '♥ В любимые'}</button>
+    <button class="btn" id="ta-pin" style="margin-top:8px;width:100%">${isPinned ? '📌 Открепить' : '📌 Закрепить вверху'}</button>
     <button class="btn" id="ta-play" style="margin-top:8px;width:100%">▶ Воспроизвести сейчас</button>`);
   $('#qs-list').onclick = e => {
     if (e.target.closest('#ta-next')){ closeSheet(); playNext(track); }
     else if (e.target.closest('#ta-addpl')){ closeSheet(); addToPlaylistSheet(track); }
     else if (e.target.closest('#ta-like')){ closeSheet(); toggleLike(track.id); }
+    else if (e.target.closest('#ta-pin')){ closeSheet(); togglePin(track.id); }
     else if (e.target.closest('#ta-play')){
       closeSheet();
       const list = (cont && cont._list) ? cont._list.filter(x => x && x.id) : [track];
@@ -754,6 +763,29 @@ $('#genres').addEventListener('click', e => {
   discoverState.genre = b.dataset.g;
   loadDiscover(true);
 });
+
+const MOOD_STATIONS = [
+  ['🎧', 'Focus', 'lofi study'],
+  ['💪', 'Workout', 'workout energy'],
+  ['😴', 'Sleep', 'sleep ambient'],
+  ['🌊', 'Chill', 'chillhop'],
+  ['🎉', 'Party', 'party dance']
+];
+$('#mood-stations').innerHTML = MOOD_STATIONS.map(([em, label, q]) =>
+  `<button class="chip mood-chip" data-mq="${esc(q)}"><span class="mood-em">${em}</span>${esc(label)}</button>`).join('');
+$('#mood-stations').addEventListener('click', e => {
+  const b = e.target.closest('[data-mq]'); if (!b) return;
+  const q = b.dataset.mq;
+  showScreen('search');
+  const input = $('#q');
+  input.value = q;
+  $('#qclear').hidden = false;
+  searchState.mode = 'tracks';
+  $$('#search-seg button').forEach(x => x.classList.toggle('on', x.dataset.v === 'tracks'));
+  $('#search-home').style.display = 'none';
+  haptic(0);
+  runSearch(q, true);
+});
 async function loadDiscover(reset){
   if (reset){ discoverState.offset = 0; discoverState.done = false; }
   discoverState.loading = true;
@@ -836,15 +868,24 @@ $('#mix-btn').addEventListener('click', async () => {
 });
 function sortLibList(list){
   const arr = list.slice();
-  if (libSort === 'name') arr.sort((a,b) => (a.title||'').localeCompare(b.title||'', 'ru'));
-  else if (libSort === 'artist') arr.sort((a,b) => ((a.artist||'') + (a.title||'')).localeCompare((b.artist||'') + (b.title||''), 'ru'));
-  else if (libSort === 'plays') arr.sort((a,b) => (b.plays||0) - (a.plays||0));
+  const pinSet = new Set(state.pinned);
+  const pinRank = t => pinSet.has(t.id) ? 1 : 0;
+  arr.sort((a, b) => {
+    const pa = pinRank(a), pb = pinRank(b);
+    if (pa !== pb) return pb - pa;
+    if (libSort === 'name') return (a.title||'').localeCompare(b.title||'', 'ru');
+    else if (libSort === 'artist') return ((a.artist||'') + (a.title||'')).localeCompare((b.artist||'') + (b.title||''), 'ru');
+    else if (libSort === 'plays') return (b.plays||0) - (a.plays||0);
+    return 0;
+  });
   return arr;
 }
 function renderLib(){
   const c = $('#lib-list');
+  const sp = $('#smart-pls');
   if (libMode === 'playlists'){
     $('#lib-sort').hidden = true;
+    if (sp) sp.hidden = true;
     const pls = state.playlists;
     let html = pls.map(p => `<div class="row-t" data-pll="${esc(p.id)}">
       <div class="thumb" style="border-radius:14px;background:var(--grad);display:grid;place-items:center;color:#fff">
@@ -858,6 +899,7 @@ function renderLib(){
     return;
   }
   $('#lib-sort').hidden = false;
+  if (sp) renderSmartPLs();
   const list = sortLibList(libFiltered((libMode === 'likes' ? state.likes : state.history).slice()));
   renderList(c, list);
   if (!list.length && libFilterQ) c.innerHTML = emptyState('Ничего', 'По запросу «' + libFilterQ + '» в списке нет совпадений');
@@ -866,6 +908,45 @@ function renderLib(){
       libMode === 'likes' ? 'Пока пусто' : 'История пуста',
       libMode === 'likes' ? 'Нажимайте на сердечко у треков — они появятся здесь' : 'Здесь появятся треки, которые вы слушали');
   }
+}
+function smartTopTracks(){
+  const trk = state.stats.trk || {};
+  return Object.entries(trk).filter(([,x]) => x && x.s).sort(([,a],[,b]) => (b.s||0) - (a.s||0)).slice(0, 30).map(([id, tk]) => {
+    const full = findTrack(+id);
+    return full || { id: +id, title: tk.t || 'Без названия', artist: tk.a || '', art: '', dur: 0 };
+  });
+}
+function renderSmartPLs(){
+  const box = $('#smart-pls'); if (!box) return;
+  const top = smartTopTracks();
+  const recent = (state.likes || []).slice(0, 30);
+  const cards = [];
+  if (top.length >= 3) cards.push({ id: 'smart-top', name: 'Топ за месяц', list: top, ic: '🏆' });
+  if (recent.length >= 3) cards.push({ id: 'smart-recent', name: 'Недавно добавленные', list: recent, ic: '🕒' });
+  if (!cards.length){ box.hidden = true; box.innerHTML = ''; box._cards = []; return; }
+  box.hidden = false;
+  box.innerHTML = cards.map(c => `<button class="smart-card" data-sp="${esc(c.id)}">
+    <div class="smart-ic">${c.ic}</div>
+    <div class="smart-n">${esc(c.name)}</div>
+    <div class="smart-c">${c.list.length} треков</div>
+  </button>`).join('');
+  box._cards = cards;
+}
+$('#smart-pls').addEventListener('click', e => {
+  const b = e.target.closest('[data-sp]'); if (!b) return;
+  const box = $('#smart-pls');
+  const card = box._cards && box._cards.find(c => c.id === b.dataset.sp);
+  if (!card || !card.list.length) return;
+  haptic(0);
+  playList(card.list.slice(), 0, card.name);
+});
+function togglePin(id){
+  const i = state.pinned.indexOf(id);
+  if (i >= 0) state.pinned.splice(i, 1); else state.pinned.push(id);
+  LS.set('pinned', state.pinned);
+  if (curScreen === 'library' && libMode !== 'playlists') renderLib();
+  toast(i >= 0 ? 'Откреплено' : 'Закреплено вверху списка');
+  haptic(0);
 }
 $('#lib-list').addEventListener('click', e => {
   if (e.target.closest('#newpl')){ createPlaylist(); return; }
@@ -1549,6 +1630,55 @@ $('#page-body').addEventListener('click', e => {
   if (list[i]) playList(list, i, $('#page-title').textContent);
 });
 
+function statsBadges(s){
+  const arts = Object.keys(s.art || {});
+  const daySet = new Set(Object.keys(s.day || {}));
+  let streak = 0, best = 0;
+  const now = Date.now();
+  for (let i = 0; i < 14; i++){
+    const key = new Date(now - i * 86400000).toISOString().slice(0, 10);
+    if (daySet.has(key)){ streak++; if (streak > best) best = streak; }
+    else { if (streak > best) best = streak; streak = 0; }
+  }
+  const marathon = Object.values(s.day || {}).some(v => v >= 7200);
+  return [
+    {n: '100 треков', ok: (s.tracks || 0) >= 100, ic: '💯'},
+    {n: '50 артистов', ok: arts.length >= 50, ic: '🎤'},
+    {n: '7 дней подряд', ok: best >= 7, ic: '🔥'},
+    {n: 'Полночь', ok: !!s.lateNight, ic: '🌙'},
+    {n: 'Марафон ≥2ч/день', ok: marathon, ic: '🏃'}
+  ];
+}
+function genreDistribution(){
+  const KW = [
+    ['Чилл', /lofi|chill|chillhop|эмбиент|ambient|sleep|study|relax|calm/i],
+    ['Хип-хоп', /hip.?hop|rap|phonk|трэп|trap|r&b|rnb|фанк/i],
+    ['Электроника', /electronic|edm|house|techno|trance|dubstep|dnb|drum.?bass/i],
+    ['Рок', /rock|рок|metal|метал|indie|инди|punk|панк/i],
+    ['Поп', /popular|поп|хит|k?pop/i],
+    ['Джаз/Блюз', /jazz|джаз|blues|блюз|soul|соул|swing/i]
+  ];
+  const src = (state.history || []).concat(state.likes || []);
+  const counts = {};
+  let total = 0;
+  for (const t of src){
+    const txt = ((t.title || '') + ' ' + (t.artist || '')).toLowerCase();
+    let matched = false;
+    for (const [name, re] of KW){ if (re.test(txt)){ counts[name] = (counts[name] || 0) + 1; total++; matched = true; break; } }
+    if (!matched){ counts['Другое'] = (counts['Другое'] || 0) + 1; total++; }
+  }
+  if (!total) return [];
+  return Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([n, c]) => ({ n, c, pct: Math.round(c / total * 100) }));
+}
+function genreDonutHTML(){
+  const dist = genreDistribution();
+  if (!dist.length) return '<p class="note" style="margin-top:8px">Послушайте больше — здесь появится распределение</p>';
+  const PAL = ['#ff5500', '#ff9d3d', '#30d158', '#0a84ff', '#bf5af2', '#8e8ea3'];
+  let acc = 0; const stops = [];
+  for (let i = 0; i < dist.length; i++){ const col = PAL[i % PAL.length]; const st = acc; acc += dist[i].pct; stops.push(col + ' ' + st + '% ' + acc + '%'); }
+  if (acc < 100) stops.push('#2b2b40 ' + acc + '% 100%');
+  return '<div class="donut"><div class="donut-ring" style="background:conic-gradient(' + stops.join(',') + ')"><div class="donut-hole"><b>' + dist.length + '</b><span>жанров</span></div></div><div class="donut-legend">' + dist.map((d, i) => '<div class="lg-row"><span class="lg-dot" style="background:' + PAL[i % PAL.length] + '"></span><span class="lg-n">' + esc(d.n) + '</span><span class="lg-v">' + d.pct + '%</span></div>').join('') + '</div></div>';
+}
 function openStats(){
   const s = state.stats || {sec:0, art:{}, day:{}, trk:{}};
   const totalSec = s.sec || 0;
@@ -1600,6 +1730,14 @@ function openStats(){
         <div class="stat-name"><span class="stat-rank">${i + 1}</span>${esc(t.t)}<span>${t.s ? (t.s / 60).toFixed(0) + 'м' : '—'}</span></div>
         <div class="stat-sub">${esc(t.a)}</div>
       </div>`).join('') : '<p class="note" style="margin-top:8px">Нет данных — послушайте любимое</p>'}
+    </div>
+    <div class="card">
+      <div class="row" style="justify-content:flex-start"><b>Достижения</b></div>
+      <div class="badge-grid">${statsBadges(s).map(b => `<div class="achv${b.ok ? '' : ' locked'}"><div class="achv-ic">${b.ic}</div><div class="achv-n">${esc(b.n)}</div><div class="achv-st">${b.ok ? 'Открыто' : 'Закрыто'}</div></div>`).join('')}</div>
+    </div>
+    <div class="card">
+      <div class="row" style="justify-content:flex-start"><b>Жанры</b></div>
+      ${genreDonutHTML()}
     </div>`);
 }
 $('#open-stats').addEventListener('click', openStats);
@@ -1608,10 +1746,12 @@ function buildBackup(){
   return {
     v: 2, app: 'soundwave', date: new Date().toISOString(),
     likes: state.likes, playlists: state.playlists, history: state.history, stats: state.stats,
+    pinned: state.pinned,
     settings: {
       accent: state.accent, theme: state.theme, amoled: state.amoled,
       autoRelated: state.autoRelated, fullOnly: state.fullOnly, viz: state.viz,
-      vizMode: state.vizMode, eq: state.eq, shuffle: state.shuffle, repeat: state.repeat, abLoop: state.abLoop
+      vizMode: state.vizMode, eq: state.eq, shuffle: state.shuffle, repeat: state.repeat, abLoop: state.abLoop,
+      karaoke: state.karaoke
     }
   };
 }
@@ -1656,6 +1796,7 @@ $('#imp-file').addEventListener('change', e => {
       if (Array.isArray(j.likes)) state.likes = j.likes;
       if (Array.isArray(j.playlists)) state.playlists = j.playlists;
       if (Array.isArray(j.history)) state.history = j.history.slice(0, 100);
+      if (Array.isArray(j.pinned)) state.pinned = j.pinned;
       if (j.stats) state.stats = j.stats;
       if (j.settings){
         Object.assign(state, j.settings);
@@ -1664,10 +1805,12 @@ $('#imp-file').addEventListener('change', e => {
         LS.set('fullonly', state.fullOnly); LS.set('viz', state.viz);
         LS.set('vizMode', state.vizMode); LS.set('eq', state.eq);
         LS.set('shuffle', state.shuffle); LS.set('repeat', state.repeat);
+        LS.set('karaoke', state.karaoke); syncKaraokeBtn();
         applyTheme();
       }
       LS.set('likes', state.likes); LS.set('playlists', state.playlists);
       LS.set('history', state.history); LS.set('stats', state.stats);
+      LS.set('pinned', state.pinned);
       applySettingsUI();
       if (curScreen === 'library') renderLib();
       renderRecentCaro();
@@ -1762,7 +1905,44 @@ async function fetchLyrics(track){
   return res;
 }
 let lyrLines = [], lyrActive = -1, lyrOpenTrack = 0;
-function resetLyrics(){ lyrLines = []; lyrActive = -1; lyrOpenTrack = 0; }
+const karaBtn = $('#lyr-kara');
+function resetLyrics(){
+  lyrLines = []; lyrActive = -1; lyrOpenTrack = 0;
+  if (karaBtn){ karaBtn.hidden = true; karaBtn.classList.remove('on'); }
+}
+function syncKaraokeBtn(){
+  if (!karaBtn) return;
+  karaBtn.setAttribute('aria-pressed', String(state.karaoke));
+  karaBtn.classList.toggle('on', state.karaoke);
+}
+function buildKaraokeLine(lineEl, i){
+  const words = (lyrLines[i].text || '').split(/\s+/).filter(Boolean);
+  lineEl.innerHTML = words.map((w, j) => `<span class="kw-w" data-wi="${j}">${esc(w)}</span>`).join(' ');
+  lineEl.dataset.kw = String(words.length);
+}
+function clearKaraokeLine(lineEl){
+  if (lineEl && lineEl.dataset.kw){
+    const li = lineEl.dataset.li;
+    lineEl.innerHTML = esc(lyrLines[+li] ? lyrLines[+li].text : lineEl.textContent);
+    delete lineEl.dataset.kw;
+  }
+}
+if (karaBtn){
+  syncKaraokeBtn();
+  karaBtn.addEventListener('click', () => {
+    state.karaoke = !state.karaoke;
+    LS.set('karaoke', state.karaoke);
+    syncKaraokeBtn();
+    if (!state.karaoke){
+      const lines = $('#lyr-body').children;
+      for (let i = 0; i < lines.length; i++) clearKaraokeLine(lines[i]);
+    } else {
+      lyrActive = -1;
+    }
+    toast(state.karaoke ? 'Караоке: подсветка по словам' : 'Караоке выключен');
+    haptic(0);
+  });
+}
 $('#np-lyrics').addEventListener('click', async () => {
   const t = current(); if (!t) return;
   $('#lyr-t').textContent = t.title;
@@ -1776,10 +1956,13 @@ $('#np-lyrics').addEventListener('click', async () => {
   if (lrc.synced){
     lyrLines = parseLRC(lrc.synced);
     body.innerHTML = lyrLines.map((l, i) => `<div class="lyr-line" data-lt="${l.t}" data-li="${i}">${esc(l.text)}</div>`).join('');
+    if (karaBtn){ karaBtn.hidden = false; syncKaraokeBtn(); }
   } else if (lrc.plain){
     lyrLines = [];
+    if (karaBtn) karaBtn.hidden = true;
     body.innerHTML = lrc.plain.split('\n').map(line => `<div class="lyr-line${line.trim() ? '' : ' past'}" style="pointer-events:none">${esc(line) || '&nbsp;'}</div>`).join('');
   } else {
+    if (karaBtn) karaBtn.hidden = true;
     body.innerHTML = '<div class="lyr-msg">Текст не найден.<br>База лирики покрывает не все треки — попробуйте поискать вручную или послушать что-то ещё 🎧</div>';
   }
 });
@@ -1793,9 +1976,23 @@ function updateLyrics(){
   const ct = audio.currentTime;
   let idx = -1;
   for (let i = 0; i < lyrLines.length; i++){ if (lyrLines[i].t <= ct) idx = i; else break; }
+  const lines = $('#lyr-body').children;
+  if (state.karaoke && idx >= 0 && lines[idx]){
+    const el = lines[idx];
+    if (idx !== lyrActive || !el.dataset.kw) buildKaraokeLine(el, idx);
+    const n = +(el.dataset.kw || 0);
+    if (n > 0){
+      const start = lyrLines[idx].t;
+      const end = idx + 1 < lyrLines.length ? lyrLines[idx + 1].t : (audio.duration || start + 4);
+      const prog = Math.min(0.999, Math.max(0, (ct - start) / Math.max(0.5, end - start)));
+      const wi = Math.min(n - 1, Math.floor(prog * n));
+      const ws = el.querySelectorAll('.kw-w');
+      for (let j = 0; j < ws.length; j++) ws[j].classList.toggle('kw', j === wi);
+    }
+  }
   if (idx === lyrActive) return;
   lyrActive = idx;
-  const lines = $('#lyr-body').children;
+  if (!state.karaoke){ for (let i = 0; i < lines.length; i++) clearKaraokeLine(lines[i]); }
   let scrollTarget = null;
   if (idx >= 0 && lines[idx]){
     const body = $('#lyr-body');
