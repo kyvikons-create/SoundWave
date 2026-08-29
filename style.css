@@ -336,3 +336,52 @@ body.paused .np-art{transform:scale(.94)}
   .art-ava{width:84px;height:84px;border-radius:20px}
   .art-name{font-size:22px}
 }
+
+/* ===== Light theme (html[data-theme="light"]) ===== */
+html[data-theme="light"]{
+  --bg:#ececf1;--bg2:#e4e4ea;--card:#ffffff;--card2:#f2f2f5;--card3:#e8e8ee;
+  --t2:#5a5a6e;--t3:#9a9aa8;--line:rgba(0,0,0,.08);--line2:rgba(0,0,0,.05);
+  --shadow:0 18px 50px rgba(0,0,0,.12);
+}
+html[data-theme="light"] body{color:#1a1a22;
+  background:radial-gradient(120% 80% at 100% 0%,var(--accg,rgba(255,85,0,.06)),transparent 50%),var(--bg)}
+html[data-theme="light"] .searchbar,
+html[data-theme="light"] .chip,
+html[data-theme="light"] .seg,
+html[data-theme="light"] .libfilter{background:var(--card2);border-color:var(--line)}
+html[data-theme="light"] .seg button.on{background:var(--card3);color:#1a1a22}
+html[data-theme="light"] .tabbar{background:rgba(255,255,255,.9)}
+html[data-theme="light"] .tab{color:#8a8a9a}
+html[data-theme="light"] .tab.on{color:var(--acc)}
+html[data-theme="light"] .mini{background:rgba(255,255,255,.92);border-color:rgba(0,0,0,.06)}
+html[data-theme="light"] .mini-t,
+html[data-theme="light"] .np-title{color:#1a1a22}
+html[data-theme="light"] .qs-panel{background:var(--card)}
+html[data-theme="light"] .np{background:var(--bg)}
+html[data-theme="light"] .np-veil{background:linear-gradient(180deg,rgba(236,236,241,.35),rgba(236,236,241,.85))}
+html[data-theme="light"] .np-ctl{color:rgba(0,0,0,.72)}
+html[data-theme="light"] .np-artist{color:rgba(0,0,0,.6)}
+html[data-theme="light"] .np-from{color:rgba(0,0,0,.5)}
+html[data-theme="light"] .np-times{color:rgba(0,0,0,.5)}
+html[data-theme="light"] .np-iconbtn,
+html[data-theme="light"] .np-like{background:rgba(0,0,0,.06);color:#1a1a22}
+html[data-theme="light"] .np-util{background:rgba(0,0,0,.05);border-color:var(--line);color:#1a1a22}
+html[data-theme="light"] .np-quebtn{background:rgba(0,0,0,.06);color:#1a1a22}
+html[data-theme="light"] .toast{background:rgba(255,255,255,.97);color:#1a1a22;border-color:var(--line)}
+html[data-theme="light"] .field input,
+html[data-theme="light"] .field textarea{background:var(--card2)}
+html[data-theme="light"] .btn{background:var(--card3);color:#1a1a22}
+html[data-theme="light"] .row-t:active{background:rgba(0,0,0,.05)}
+html[data-theme="light"] .heart{color:#9a9aa8}
+html[data-theme="light"] .rank,
+html[data-theme="light"] .qnum{color:#9a9aa8}
+html[data-theme="light"] .lyr{background:rgba(236,236,241,.97)}
+html[data-theme="light"] .lyr-line{color:rgba(0,0,0,.32)}
+html[data-theme="light"] .lyr-line.on{color:#1a1a22}
+html[data-theme="light"] .lyr-line.past{color:rgba(0,0,0,.45)}
+html[data-theme="light"] .lyr-x{background:rgba(0,0,0,.08);color:#1a1a22}
+html[data-theme="light"] .t-artist{color:var(--t2)}
+html[data-theme="light"] .hero-s,
+html[data-theme="light"] .hint{color:var(--t2)}
+html[data-theme="light"] .page{background:var(--bg)}
+html[data-theme="light"] .share-ph{background:#e8e8ee}

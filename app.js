@@ -42,6 +42,7 @@ const state = {
   fullOnly: LS.get('fullonly', false),
   viz: LS.get('viz', false),
   amoled: LS.get('amoled', false),
+  theme: LS.get('theme', 'dark'),
   accent: LS.get('accent', 'orange'),
   shuffle: LS.get('shuffle', false),
   repeat: LS.get('repeat', 'off')
@@ -53,7 +54,8 @@ function applyTheme(){
   r.setProperty('--acc', a[0]); r.setProperty('--acc2', a[1]);
   r.setProperty('--grad', `linear-gradient(135deg,${a[0]},${a[1]})`);
   r.setProperty('--accg', a[2]);
-  document.documentElement.classList.toggle('amoled', state.amoled);
+  document.documentElement.setAttribute('data-theme', state.theme || 'dark');
+  document.documentElement.classList.toggle('amoled', state.amoled && state.theme !== 'light');
 }
 
 const I = {
@@ -1537,6 +1539,8 @@ $('#opt-wake').addEventListener('change', e => {
 if (LS.get('wake', false)) nativeCmd({cmd:'keepawake', on:true});
 $('#opt-amoled').checked = state.amoled;
 $('#opt-amoled').addEventListener('change', e => { state.amoled = e.target.checked; LS.set('amoled', state.amoled); applyTheme(); });
+$('#opt-light').checked = state.theme === 'light';
+$('#opt-light').addEventListener('change', e => { state.theme = e.target.checked ? 'light' : 'dark'; LS.set('theme', state.theme); applyTheme(); });
 $('#opt-auto').checked = state.autoRelated;
 $('#opt-auto').addEventListener('change', e => { state.autoRelated = e.target.checked; LS.set('autorel', state.autoRelated); });
 $('#opt-full').checked = state.fullOnly;
