@@ -102,7 +102,7 @@ const PLACEHOLDER = 'data:image/svg+xml,' + encodeURIComponent(
 const EQ = '<span class="eq"><i></i><i></i><i></i></span>';
 
 const API = 'https://api-v2.soundcloud.com';
-const FALLBACK_CID = 'UMY1dzQ68n2QbCuypNe8JOivmV2FO2Ep';
+const FALLBACK_CID = 'Pb72ranhoyt6gw7hM7TkzUItXlMWSNSo';
 let cid = LS.get('cid', null) || FALLBACK_CID;
 let cidState = 'mid';
 let localProxy = null;
